@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CF Shipping Request</title>
+<script src="https://p.trellocdn.com/power-up.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: transparent;
+  --row-bg: transparent;
+  --row-hover: rgba(0,0,0,0.06);
+  --border: rgba(0,0,0,0.12);
+  --text: #172b4d;
+  --sub: #6b778c;
+  --accent: #5b8dee;
+  --warn: #e6a817;
+  --danger: #e54545;
+  --success: #11c987;
+  --radius: 8px;
+  --input-bg: #f4f5f7;
+  --dropdown-bg: #ffffff;
+  --check-active: #5b8dee;
+  --check-inactive: rgba(0,0,0,0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --row-hover: #252839;
+    --border: #2d3148;
+    --text: #dde1f0;
+    --sub: #7880a0;
+    --input-bg: #0d0f14;
+    --dropdown-bg: #0d0f14;
+    --check-active: #5b8dee;
+    --check-inactive: #2d3148;
+  }
+}
+
+html { overflow: hidden; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0; margin: 0;
+  overflow: visible;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Auth screen ── */
+.auth-screen { padding: 16px; background: var(--input-bg); border-radius: var(--radius); margin: 8px; }
+.auth-screen p { font-size: 12px; color: var(--sub); line-height: 1.7; margin-bottom: 12px; }
+.auth-screen a { color: var(--accent); }
+.auth-textarea { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: monospace; font-size: 11px; resize: none; height: 60px; margin-bottom: 8px; }
+.auth-textarea:focus { outline: none; border-color: var(--accent); }
+
+/* ── Loading / error ── */
+.state { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--sub); font-family: monospace; }
+.state.error { color: var(--danger); }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Header ── */
+.hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.hdr-left { display: flex; align-items: center; gap: 8px; }
+.hdr-title { font-size: 12px; font-weight: 600; color: var(--sub); letter-spacing: 0.6px; text-transform: uppercase; }
+.hdr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+.hdr-status.saved { background: rgba(17,201,135,0.12); color: var(--success); }
+.hdr-status.unsaved { background: rgba(230,168,23,0.12); color: var(--warn); }
+
+.btn-sm {
+  padding: 4px 10px; border-radius: 5px; font-size: 11px;
+  font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--sub);
+  transition: all 0.15s;
+}
+.btn-sm:hover { border-color: var(--sub); color: var(--text); }
+.btn-sm.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-sm.primary:hover { opacity: 0.88; }
+.btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Form sections ── */
+.form-wrap { padding: 8px 12px; }
+
+.section-label {
+  font-size: 10px; font-weight: 600; color: var(--sub);
+  letter-spacing: 0.5px; text-transform: uppercase;
+  margin: 10px 0 6px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.section-label:first-child { margin-top: 0; }
+
+/* ── Checkbox rows ── */
+.check-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px; border-radius: var(--radius);
+  cursor: pointer; transition: background 0.15s;
+  user-select: none;
+}
+.check-row:hover { background: var(--row-hover); }
+.check-row.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+.check-box {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  border: 2px solid var(--check-inactive);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; background: transparent;
+}
+.check-row.active .check-box {
+  background: var(--check-active); border-color: var(--check-active);
+}
+.check-box::after {
+  content: '✓'; font-size: 11px; font-weight: 700; color: #fff;
+  opacity: 0; transition: opacity 0.15s;
+}
+.check-row.active .check-box::after { opacity: 1; }
+
+.check-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+.check-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.check-sub { font-size: 10px; color: var(--sub); margin-left: auto; white-space: nowrap; }
+
+/* ── Conditional text fields ── */
+.conditional-field {
+  margin: 0 0 4px 46px; /* indent to align with label text */
+  overflow: hidden;
+  max-height: 0; opacity: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+}
+.conditional-field.visible {
+  max-height: 80px; opacity: 1; margin: 4px 0 8px 46px;
+}
+
+/* ── Text inputs ── */
+.form-input {
+  width: 100%; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--input-bg);
+  color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px;
+  transition: border-color 0.15s;
+}
+.form-input:focus { outline: none; border-color: var(--accent); }
+.form-input::placeholder { color: var(--sub); opacity: 0.6; }
+
+.form-textarea {
+  width: 100%; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--input-bg);
+  color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px;
+  resize: vertical; min-height: 48px; max-height: 120px;
+  transition: border-color 0.15s;
+}
+.form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-textarea::placeholder { color: var(--sub); opacity: 0.6; }
+
+.field-row { margin-bottom: 8px; }
+.field-label {
+  font-size: 11px; font-weight: 500; color: var(--sub);
+  margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+}
+
+/* ── Footer ── */
+.footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px 12px; margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.footer-info { font-size: 10px; color: var(--sub); }
+
+/* ── Saved summary view ── */
+.summary-card {
+  margin: 8px 12px 12px; background: var(--input-bg);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.summary-header {
+  background: var(--row-hover); padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.summary-header-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.summary-row {
+  padding: 6px 14px; border-top: 1px solid var(--border);
+  font-size: 12px; display: flex; align-items: flex-start; gap: 8px;
+}
+.summary-icon { flex-shrink: 0; width: 18px; text-align: center; }
+.summary-label { color: var(--sub); font-size: 11px; min-width: 60px; flex-shrink: 0; }
+.summary-value { color: var(--text); font-weight: 500; }
+.summary-empty { color: var(--sub); font-style: italic; font-weight: 400; }
+
+/* ── Status message ── */
+.status-msg { text-align: center; font-size: 11px; font-family: monospace; padding: 4px 12px 10px; min-height: 20px; color: var(--success); }
+.status-msg.error { color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="app"><div class="state"><div class="spinner"></div>Loading...</div></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════
+const CFG = {
+  API_KEY: '53abc1f4686798eadbeb8f91ea79c9bb',
+  STORAGE_KEY: 'shippingRequest',
+};
+
+// Delivery instruction definitions — order matters (matches spec)
+const FLAGS = [
+  { id: 'firstStop',   icon: '🥇', label: 'First Stop',         group: 'stopOrder', sub: 'Scheduling preference' },
+  { id: 'lastStop',    icon: '🏁', label: 'Last Stop',          group: 'stopOrder', sub: 'Scheduling preference' },
+  { id: 'dropOff',     icon: '📦', label: 'Drop-Off',           group: 'delivery',  sub: 'Leave at door/dock' },
+  { id: 'whiteGlove',  icon: '🧤', label: 'White Glove',        group: 'delivery',  sub: 'Inside placement' },
+  { id: 'equipRemoval',icon: '♻️', label: 'Equipment Removal',  group: null,        sub: 'Describe items to remove', hasTextField: true },
+];
+
+// ════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════
+let t = null;
+let token = null;
+let formData = {
+  firstStop: false,
+  lastStop: false,
+  dropOff: false,
+  whiteGlove: false,
+  equipRemoval: false,
+  equipRemovalDetail: '',
+  specialRequest: '',
+  customerPhone: '',
+  savedAt: null,
+};
+
+// ════════════════════════════════════════════════════════
+// Trello API (same pattern as Attendance)
+// ════════════════════════════════════════════════════════
+async function api(path, method = 'GET', body = null) {
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `https://api.trello.com/1${path}${sep}key=${CFG.API_KEY}&token=${token}`;
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`Trello ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// ════════════════════════════════════════════════════════
+// Mutual exclusivity enforcement
+// ════════════════════════════════════════════════════════
+function enforceExclusivity(flagId) {
+  const flag = FLAGS.find(f => f.id === flagId);
+  if (!flag || !flag.group) return;
+
+  // If activating this flag, deactivate the other in the same group
+  if (formData[flagId]) {
+    FLAGS.forEach(f => {
+      if (f.group === flag.group && f.id !== flagId) {
+        formData[f.id] = false;
+      }
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// Read form state from DOM (Attendance lesson: DOM = truth)
+// ════════════════════════════════════════════════════════
+function readFormFromDOM() {
+  const data = {
+    firstStop: false,
+    lastStop: false,
+    dropOff: false,
+    whiteGlove: false,
+    equipRemoval: false,
+    equipRemovalDetail: '',
+    specialRequest: '',
+    customerPhone: '',
+  };
+
+  // Read checkboxes from active class on rows
+  FLAGS.forEach(f => {
+    const row = document.getElementById(`check-${f.id}`);
+    if (row) data[f.id] = row.classList.contains('active');
+  });
+
+  // Read text fields
+  const eqDetail = document.getElementById('equipRemovalDetail');
+  if (eqDetail) data.equipRemovalDetail = eqDetail.value.trim();
+
+  const special = document.getElementById('specialRequest');
+  if (special) data.specialRequest = special.value.trim();
+
+  const phone = document.getElementById('customerPhone');
+  if (phone) data.customerPhone = phone.value.trim();
+
+  return data;
+}
+
+// ════════════════════════════════════════════════════════
+// Toggle checkbox
+// ════════════════════════════════════════════════════════
+function toggleCheck(flagId) {
+  formData[flagId] = !formData[flagId];
+  enforceExclusivity(flagId);
+  render();
+  // NOTE: No t.sizeTo() here — same lesson as Attendance
+}
+
+// ════════════════════════════════════════════════════════
+// Save to Trello (t.set = pluginData, readable by CF Dispatch via REST)
+// ════════════════════════════════════════════════════════
+async function saveForm() {
+  const btn = document.getElementById('saveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  try {
+    // Read from DOM, not in-memory state (Attendance lesson)
+    const data = readFormFromDOM();
+    data.savedAt = new Date().toISOString();
+
+    // Store via t.set — this becomes pluginData readable via REST API
+    await t.set('card', 'shared', CFG.STORAGE_KEY, data);
+
+    // Update in-memory state
+    Object.assign(formData, data);
+
+    if (btn) { btn.textContent = '✓ Saved'; btn.style.color = '#fff'; btn.style.background = 'var(--success)'; btn.style.borderColor = 'var(--success)'; }
+    setTimeout(() => {
+      if (btn) { btn.textContent = 'Save'; btn.disabled = false; btn.style.color = ''; btn.style.background = ''; btn.style.borderColor = ''; }
+      render();
+    }, 1500);
+
+  } catch (e) {
+    console.error('Save error:', e);
+    if (btn) { btn.textContent = '✗ Error'; btn.disabled = false; }
+    const msg = document.getElementById('statusMsg');
+    if (msg) { msg.textContent = e.message; msg.className = 'status-msg error'; }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// Clear form
+// ════════════════════════════════════════════════════════
+async function clearForm() {
+  formData = {
+    firstStop: false, lastStop: false,
+    dropOff: false, whiteGlove: false,
+    equipRemoval: false, equipRemovalDetail: '',
+    specialRequest: '', customerPhone: '',
+    savedAt: null,
+  };
+  await t.set('card', 'shared', CFG.STORAGE_KEY, formData);
+  render();
+}
+
+// ════════════════════════════════════════════════════════
+// Render
+// ════════════════════════════════════════════════════════
+function render() {
+  const hasSaved = !!formData.savedAt;
+  const savedLabel = hasSaved
+    ? new Date(formData.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+    : null;
+
+  // Build checkbox rows
+  const checkRows = FLAGS.map(f => {
+    const isActive = formData[f.id];
+    const isDisabled = !isActive && f.group && FLAGS.some(other =>
+      other.group === f.group && other.id !== f.id && formData[other.id]
+    );
+
+    const conditionalField = f.hasTextField ? `
+      <div class="conditional-field ${isActive ? 'visible' : ''}" id="cond-${f.id}">
+        <input class="form-input" type="text" id="${f.id}Detail"
+          placeholder="Describe items to remove (e.g., 2 old refrigeration units)"
+          value="${formData[f.id + 'Detail'] || ''}"
+        />
+      </div>` : '';
+
+    return `
+      <div class="check-row ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}"
+           id="check-${f.id}"
+           onclick="${isDisabled ? '' : `toggleCheck('${f.id}')`}">
+        <div class="check-box"></div>
+        <span class="check-icon">${f.icon}</span>
+        <span class="check-label">${f.label}</span>
+        <span class="check-sub">${f.sub}</span>
+      </div>
+      ${conditionalField}`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="hdr">
+      <div class="hdr-left">
+        <span class="hdr-title">Shipping Request</span>
+        ${hasSaved ? `<span class="hdr-status saved">✓ Saved ${savedLabel}</span>` : ''}
+      </div>
+      <div class="hdr-right">
+        ${hasSaved ? `<button class="btn-sm" onclick="clearForm()">Clear</button>` : ''}
+        <button class="btn-sm primary" onclick="saveForm()" id="saveBtn">Save</button>
+      </div>
+    </div>
+
+    <div class="form-wrap">
+      <div class="section-label">Delivery Instructions</div>
+      ${checkRows}
+
+      <div class="section-label" style="margin-top:14px">Contact</div>
+      <div class="field-row">
+        <div class="field-label">📞 Customer Phone</div>
+        <input class="form-input" type="tel" id="customerPhone"
+          placeholder="e.g., 323-555-1234"
+          value="${formData.customerPhone || ''}"
+        />
+      </div>
+
+      <div class="section-label" style="margin-top:14px">Special Request</div>
+      <div class="field-row">
+        <textarea class="form-textarea" id="specialRequest"
+          placeholder="Bring ID, go to loading dock, email invoice only, etc."
+        >${formData.specialRequest || ''}</textarea>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="footer-info">Data saved to this card · visible to manager in CF Dispatch</span>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>`;
+
+  // Size iframe ONCE after render (Attendance lesson)
+  if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
+}
+
+// ════════════════════════════════════════════════════════
+// Auth screen (same as Attendance)
+// ════════════════════════════════════════════════════════
+function showAuth() {
+  document.getElementById('app').innerHTML = `
+    <div class="auth-screen">
+      <p><strong>One-time setup</strong> — get your Trello token:</p>
+      <p>
+        <a href="https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=${CFG.API_KEY}&name=CF+Shipping+Request" target="_blank">
+          → Open Trello Authorization Page
+        </a><br/>
+        Click <strong>Allow</strong>, then copy and paste the token below:
+      </p>
+      <textarea class="auth-textarea" id="tokenInput" placeholder="Paste token here (starts with ATTA...)"></textarea>
+      <button class="btn-sm primary" style="width:100%;padding:8px" onclick="saveToken()">Save Token</button>
+      <div id="authMsg" style="font-size:11px;color:var(--danger);margin-top:6px;min-height:14px;font-family:monospace"></div>
+    </div>`;
+  if (t) t.sizeTo('#app').catch(() => {});
+}
+
+async function saveToken() {
+  const val = document.getElementById('tokenInput')?.value.trim();
+  const msg = document.getElementById('authMsg');
+  if (!val) { if (msg) msg.textContent = 'Paste your token first.'; return; }
+  if (val.length < 40) { if (msg) msg.textContent = 'Token too short — copy the whole thing.'; return; }
+  try {
+    await t.set('member', 'private', 'token', val);
+    token = val;
+    await boot();
+  } catch (e) {
+    if (msg) msg.textContent = 'Error: ' + e.message;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// UI state helper
+// ════════════════════════════════════════════════════════
+function setState(type, msg) {
+  document.getElementById('app').innerHTML = type === 'loading'
+    ? `<div class="state"><div class="spinner"></div>${msg}</div>`
+    : `<div class="state error">⚠️ ${msg}<br/><br/><button class="btn-sm" onclick="boot()">↺ Retry</button></div>`;
+  if (t) t.sizeTo('#app').catch(() => {});
+}
+
+// ════════════════════════════════════════════════════════
+// Boot
+// ════════════════════════════════════════════════════════
+async function boot() {
+  setState('loading', 'Initializing...');
+  try {
+    if (!t) {
+      t = window.TrelloPowerUp.iframe({
+        appKey: CFG.API_KEY,
+        appName: 'CF Shipping Request',
+      });
+    }
+
+    token = await t.get('member', 'private', 'token');
+    if (!token) { showAuth(); return; }
+
+    // Load saved form data if any
+    const saved = await t.get('card', 'shared', CFG.STORAGE_KEY);
+    if (saved) {
+      Object.assign(formData, saved);
+    }
+
+    render();
+  } catch (e) {
+    console.error('Boot error:', e);
+    if (!token) { showAuth(); return; }
+    setState('error', e.message);
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
