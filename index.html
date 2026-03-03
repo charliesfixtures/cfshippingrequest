@@ -237,7 +237,8 @@ body {
 const CFG = {
   API_KEY: '53abc1f4686798eadbeb8f91ea79c9bb',
   STORAGE_KEY: 'shippingRequest',
-  RS_FIELD_ID: '699deaf8ae2995aa04f30441',
+  // RS field ID looked up dynamically per-board (see findRSFieldId)
+  // Production: 699deaf8ae2995aa04f30441 | Test: 69a61fe3c1ae84f3a1d62bf8
 };
 
 // ════════════════════════════════════════════════════════
@@ -288,13 +289,39 @@ async function api(path, method = 'GET', body = null) {
 }
 
 // ════════════════════════════════════════════════════════
-// Check RS custom field
+// Find RS custom field ID dynamically (board-agnostic)
+// ════════════════════════════════════════════════════════
+let cachedRSFieldId = null;
+
+async function findRSFieldId() {
+  if (cachedRSFieldId) return cachedRSFieldId;
+  try {
+    const board = await t.board('id');
+    const fields = await api(`/boards/${board.id}/customFields`);
+    const rsField = fields.find(f => f.name === 'RS');
+    if (rsField) cachedRSFieldId = rsField.id;
+    return cachedRSFieldId;
+  } catch (e) {
+    console.warn('Could not look up RS field definition:', e);
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// Check RS custom field (dynamic ID lookup)
 // ════════════════════════════════════════════════════════
 async function checkRS() {
   try {
+    const rsFieldId = await findRSFieldId();
+    if (!rsFieldId) {
+      // Graceful fail: can't find RS field on this board — show form anyway
+      console.warn('RS field not found on board — showing form (graceful fail)');
+      return true;
+    }
+
     const card = await t.card('customFieldItems');
     const cfItems = card.customFieldItems || [];
-    const rsField = cfItems.find(cf => cf.idCustomField === CFG.RS_FIELD_ID);
+    const rsField = cfItems.find(cf => cf.idCustomField === rsFieldId);
     return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
   } catch (e) {
     console.warn('Could not check RS field:', e);
