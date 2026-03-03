@@ -126,7 +126,7 @@ body {
 
 /* ── Conditional text fields ── */
 .conditional-field {
-  margin: 0 0 4px 46px; /* indent to align with label text */
+  margin: 0 0 4px 46px;
   overflow: hidden;
   max-height: 0; opacity: 0;
   transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
@@ -168,26 +168,6 @@ body {
   border-top: 1px solid var(--border);
 }
 .footer-info { font-size: 10px; color: var(--sub); }
-
-/* ── Saved summary view ── */
-.summary-card {
-  margin: 8px 12px 12px; background: var(--input-bg);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  overflow: hidden;
-}
-.summary-header {
-  background: var(--row-hover); padding: 10px 14px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.summary-header-title { font-size: 12px; font-weight: 600; color: var(--text); }
-.summary-row {
-  padding: 6px 14px; border-top: 1px solid var(--border);
-  font-size: 12px; display: flex; align-items: flex-start; gap: 8px;
-}
-.summary-icon { flex-shrink: 0; width: 18px; text-align: center; }
-.summary-label { color: var(--sub); font-size: 11px; min-width: 60px; flex-shrink: 0; }
-.summary-value { color: var(--text); font-weight: 500; }
-.summary-empty { color: var(--sub); font-style: italic; font-weight: 400; }
 
 /* ── Status message ── */
 .status-msg { text-align: center; font-size: 11px; font-family: monospace; padding: 4px 12px 10px; min-height: 20px; color: var(--success); }
@@ -252,7 +232,6 @@ function enforceExclusivity(flagId) {
   const flag = FLAGS.find(f => f.id === flagId);
   if (!flag || !flag.group) return;
 
-  // If activating this flag, deactivate the other in the same group
   if (formData[flagId]) {
     FLAGS.forEach(f => {
       if (f.group === flag.group && f.id !== flagId) {
@@ -267,23 +246,17 @@ function enforceExclusivity(flagId) {
 // ════════════════════════════════════════════════════════
 function readFormFromDOM() {
   const data = {
-    firstStop: false,
-    lastStop: false,
-    dropOff: false,
-    whiteGlove: false,
-    equipRemoval: false,
-    equipRemovalDetail: '',
-    specialRequest: '',
-    customerPhone: '',
+    firstStop: false, lastStop: false,
+    dropOff: false, whiteGlove: false,
+    equipRemoval: false, equipRemovalDetail: '',
+    specialRequest: '', customerPhone: '',
   };
 
-  // Read checkboxes from active class on rows
   FLAGS.forEach(f => {
     const row = document.getElementById(`check-${f.id}`);
     if (row) data[f.id] = row.classList.contains('active');
   });
 
-  // Read text fields
   const eqDetail = document.getElementById('equipRemovalDetail');
   if (eqDetail) data.equipRemovalDetail = eqDetail.value.trim();
 
@@ -307,26 +280,33 @@ function toggleCheck(flagId) {
 }
 
 // ════════════════════════════════════════════════════════
-// Save to Trello (t.set = pluginData, readable by CF Dispatch via REST)
+// Save to Trello (t.set = pluginData, readable by CF Dispatch)
 // ════════════════════════════════════════════════════════
 async function saveForm() {
   const btn = document.getElementById('saveBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
   try {
-    // Read from DOM, not in-memory state (Attendance lesson)
     const data = readFormFromDOM();
     data.savedAt = new Date().toISOString();
 
-    // Store via t.set — this becomes pluginData readable via REST API
     await t.set('card', 'shared', CFG.STORAGE_KEY, data);
-
-    // Update in-memory state
     Object.assign(formData, data);
 
-    if (btn) { btn.textContent = '✓ Saved'; btn.style.color = '#fff'; btn.style.background = 'var(--success)'; btn.style.borderColor = 'var(--success)'; }
+    if (btn) {
+      btn.textContent = '✓ Saved';
+      btn.style.color = '#fff';
+      btn.style.background = 'var(--success)';
+      btn.style.borderColor = 'var(--success)';
+    }
     setTimeout(() => {
-      if (btn) { btn.textContent = 'Save'; btn.disabled = false; btn.style.color = ''; btn.style.background = ''; btn.style.borderColor = ''; }
+      if (btn) {
+        btn.textContent = 'Save';
+        btn.disabled = false;
+        btn.style.color = '';
+        btn.style.background = '';
+        btn.style.borderColor = '';
+      }
       render();
     }, 1500);
 
@@ -362,7 +342,6 @@ function render() {
     ? new Date(formData.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
     : null;
 
-  // Build checkbox rows
   const checkRows = FLAGS.map(f => {
     const isActive = formData[f.id];
     const isDisabled = !isActive && f.group && FLAGS.some(other =>
@@ -423,16 +402,15 @@ function render() {
     </div>
 
     <div class="footer">
-      <span class="footer-info">Data saved to this card · visible to manager in CF Dispatch</span>
+      <span class="footer-info">Data saved to this card · visible in CF Dispatch</span>
     </div>
     <div class="status-msg" id="statusMsg"></div>`;
 
-  // Size iframe ONCE after render (Attendance lesson)
   if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
 }
 
 // ════════════════════════════════════════════════════════
-// Auth screen (same as Attendance)
+// Auth screen
 // ════════════════════════════════════════════════════════
 function showAuth() {
   document.getElementById('app').innerHTML = `
@@ -491,7 +469,6 @@ async function boot() {
     token = await t.get('member', 'private', 'token');
     if (!token) { showAuth(); return; }
 
-    // Load saved form data if any
     const saved = await t.get('card', 'shared', CFG.STORAGE_KEY);
     if (saved) {
       Object.assign(formData, saved);

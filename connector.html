@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
+<body>
+<script>
+(function() {
+  var BASE_URL = 'https://charliesfixtures.github.io/cfshippingrequest/';
+
+  TrelloPowerUp.initialize({
+
+    // ── Card back section ────────────────────────────────────
+    // Shows on ALL cards — every card could be a delivery request
+    'card-back-section': function(t) {
+      return {
+        title: 'Shipping Request',
+        icon:  BASE_URL + 'icon.svg',
+        content: {
+          type:   'iframe',
+          url:    t.signUrl(BASE_URL + 'index.html'),
+          height: 35,
+        },
+      };
+    },
+
+    'authorization-status': function(t, options) {
+      return t.get('member', 'private', 'token').then(function(token) {
+        return { authorized: !!token };
+      });
+    },
+
+    'show-authorization': function(t, options) {
+      return t.popup({
+        title: 'Authorize Shipping Request',
+        url: BASE_URL + 'index.html',
+        height: 300,
+      });
+    },
+
+  }, {
+    appKey:  '53abc1f4686798eadbeb8f91ea79c9bb',
+    appName: 'CF Shipping Request',
+  });
+
+})();
+</script>
+</body>
+</html>
