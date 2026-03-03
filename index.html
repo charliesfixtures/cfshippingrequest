@@ -777,6 +777,15 @@ async function boot() {
     }
 
     render();
+
+    // Register render callback — Trello fires this when card data changes
+    // Re-checks RS so form appears without page refresh
+    t.render(async function() {
+      const wasRS = hasRS;
+      hasRS = await checkRS();
+      if (hasRS !== wasRS) render();
+    });
+
   } catch (e) {
     console.error('Boot error:', e);
     if (!token) { showAuth(); return; }
