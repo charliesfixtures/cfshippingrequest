@@ -154,6 +154,7 @@ body {
 }
 .form-input:focus { outline: none; border-color: var(--accent); }
 .form-input::placeholder { color: var(--sub); opacity: 0.6; }
+.form-input.error { border-color: var(--danger); }
 
 .form-textarea {
   width: 100%; padding: 8px 10px; border-radius: 6px;
@@ -170,6 +171,13 @@ body {
   font-size: 11px; font-weight: 500; color: var(--sub);
   margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
 }
+
+/* ── Validation nudge ── */
+.validation-msg {
+  font-size: 11px; color: var(--danger); margin: 4px 0 4px 46px;
+  display: none;
+}
+.validation-msg.show { display: block; }
 
 /* ── Footer ── */
 .footer {
@@ -207,6 +215,9 @@ body {
   border: 1px solid var(--border);
 }
 .summary-tag .tag-icon { font-size: 12px; }
+.summary-tag.default {
+  border-style: dashed; opacity: 0.7;
+}
 
 .summary-detail {
   font-size: 11px; color: var(--sub); line-height: 1.5;
@@ -216,6 +227,7 @@ body {
 </style>
 </head>
 <body>
+
 <div id="app"><div class="state"><div class="spinner"></div>Loading...</div></div>
 
 <script>
@@ -228,13 +240,18 @@ const CFG = {
   RS_FIELD_ID: '699deaf8ae2995aa04f30441',
 };
 
-// Delivery instruction definitions — order matters (matches spec)
+// ════════════════════════════════════════════════════════
+// v0.5 — Delivery instruction definitions
+// Section 1: Handling (Drop-Off opt-in, White Glove = default assumed)
+// Section 2: Scheduling (First/Last Stop, mutually exclusive, optional)
+// Section 3: Memos (Delivery + Pick-Up, independent, text required when checked)
+// ════════════════════════════════════════════════════════
 const FLAGS = [
-  { id: 'firstStop',   icon: '🥇', label: 'First Stop',         tag: '1st',   group: 'stopOrder', sub: 'Scheduling preference' },
-  { id: 'lastStop',    icon: '🏁', label: 'Last Stop',          tag: 'Last',  group: 'stopOrder', sub: 'Scheduling preference' },
-  { id: 'dropOff',     icon: '📦', label: 'Drop-Off',           tag: 'Drop',  group: 'delivery',  sub: 'Leave at door/dock' },
-  { id: 'whiteGlove',  icon: '🧤', label: 'White Glove',        tag: 'Glove', group: 'delivery',  sub: 'Inside placement' },
-  { id: 'equipRemoval',icon: '♻️', label: 'Equipment Removal',  tag: 'Haul',  group: null,        sub: 'Describe items to remove', hasTextField: true },
+  { id: 'dropOff',      icon: '📦', label: 'Drop-Off',       tag: 'Drop',     group: null,        sub: 'Leave at door/dock',          section: 'handling' },
+  { id: 'firstStop',    icon: '🥇', label: 'First Stop',     tag: '1st',      group: 'stopOrder', sub: 'Scheduling preference',       section: 'scheduling' },
+  { id: 'lastStop',     icon: '🏁', label: 'Last Stop',      tag: 'Last',     group: 'stopOrder', sub: 'Scheduling preference',       section: 'scheduling' },
+  { id: 'deliveryMemo', icon: '📋', label: 'Delivery Memo',  tag: 'Delivery', group: null,        sub: 'Partial or specific delivery', section: 'memos', hasTextField: true, textPlaceholder: 'Describe items being delivered (e.g., deliver only items 1, 3 — fridge and ice maker)', textRequired: true },
+  { id: 'pickUpMemo',   icon: '♻️', label: 'Pick-Up Memo',   tag: 'Pick-up',  group: null,        sub: 'Items returning on truck',     section: 'memos', hasTextField: true, textPlaceholder: 'Describe items being picked up (e.g., old 6-burner range for replacement)', textRequired: true },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -245,12 +262,13 @@ let token = null;
 let hasRS = false;       // RS custom field filled?
 let viewMode = 'form';   // 'form' | 'summary'
 let formData = {
+  dropOff: false,
   firstStop: false,
   lastStop: false,
-  dropOff: false,
-  whiteGlove: false,
-  equipRemoval: false,
-  equipRemovalDetail: '',
+  deliveryMemo: false,
+  deliveryMemoDetail: '',
+  pickUpMemo: false,
+  pickUpMemoDetail: '',
   specialRequest: '',
   customerPhone: '',
   savedAt: null,
@@ -277,12 +295,10 @@ async function checkRS() {
     const card = await t.card('customFieldItems');
     const cfItems = card.customFieldItems || [];
     const rsField = cfItems.find(cf => cf.idCustomField === CFG.RS_FIELD_ID);
-    // RS is filled if it exists and has a non-empty value
     return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
   } catch (e) {
     console.warn('Could not check RS field:', e);
     // Graceful fail: if we can't check, show the form anyway
-    // Better to let the salesperson fill it than block them
     return true;
   }
 }
@@ -309,8 +325,10 @@ function enforceExclusivity(flagId) {
 function toggleCheck(flagId) {
   formData[flagId] = !formData[flagId];
   enforceExclusivity(flagId);
+  // Clear validation message on toggle
+  const valMsg = document.getElementById(`val-${flagId}`);
+  if (valMsg) valMsg.classList.remove('show');
   render();
-  // NOTE: No t.sizeTo() here — same lesson as Attendance
 }
 
 // ════════════════════════════════════════════════════════
@@ -318,9 +336,10 @@ function toggleCheck(flagId) {
 // ════════════════════════════════════════════════════════
 function readFormFromDOM() {
   const data = {
+    dropOff: false,
     firstStop: false, lastStop: false,
-    dropOff: false, whiteGlove: false,
-    equipRemoval: false, equipRemovalDetail: '',
+    deliveryMemo: false, deliveryMemoDetail: '',
+    pickUpMemo: false, pickUpMemoDetail: '',
     specialRequest: '', customerPhone: '',
   };
 
@@ -329,8 +348,11 @@ function readFormFromDOM() {
     if (row) data[f.id] = row.classList.contains('active');
   });
 
-  const eqDetail = document.getElementById('equipRemovalDetail');
-  if (eqDetail) data.equipRemovalDetail = eqDetail.value.trim();
+  const delDetail = document.getElementById('deliveryMemoDetail');
+  if (delDetail) data.deliveryMemoDetail = delDetail.value.trim();
+
+  const puDetail = document.getElementById('pickUpMemoDetail');
+  if (puDetail) data.pickUpMemoDetail = puDetail.value.trim();
 
   const special = document.getElementById('specialRequest');
   if (special) data.specialRequest = special.value.trim();
@@ -342,14 +364,46 @@ function readFormFromDOM() {
 }
 
 // ════════════════════════════════════════════════════════
+// Validate — memo text required when checkbox ticked
+// ════════════════════════════════════════════════════════
+function validateForm(data) {
+  const errors = [];
+
+  FLAGS.forEach(f => {
+    if (f.textRequired && data[f.id] && !data[f.id + 'Detail']) {
+      errors.push(f.id);
+    }
+  });
+
+  return errors;
+}
+
+// ════════════════════════════════════════════════════════
 // Save to Trello (t.set = pluginData, readable by CF Dispatch)
 // ════════════════════════════════════════════════════════
 async function saveForm() {
   const btn = document.getElementById('saveBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
   try {
     const data = readFormFromDOM();
+
+    // Validate memo fields
+    const errors = validateForm(data);
+    if (errors.length > 0) {
+      // Show validation messages + highlight fields
+      errors.forEach(flagId => {
+        const valMsg = document.getElementById(`val-${flagId}`);
+        if (valMsg) valMsg.classList.add('show');
+        const input = document.getElementById(flagId + 'Detail');
+        if (input) input.classList.add('error');
+      });
+      // Resize iframe to fit validation messages
+      if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
     data.savedAt = new Date().toISOString();
 
     await t.set('card', 'shared', CFG.STORAGE_KEY, data);
@@ -372,9 +426,10 @@ async function saveForm() {
 // ════════════════════════════════════════════════════════
 async function clearForm() {
   formData = {
+    dropOff: false,
     firstStop: false, lastStop: false,
-    dropOff: false, whiteGlove: false,
-    equipRemoval: false, equipRemovalDetail: '',
+    deliveryMemo: false, deliveryMemoDetail: '',
+    pickUpMemo: false, pickUpMemoDetail: '',
     specialRequest: '', customerPhone: '',
     savedAt: null,
   };
@@ -412,15 +467,32 @@ function renderSummary() {
     : '';
 
   // Build active flag tags
-  const activeTags = FLAGS
-    .filter(f => formData[f.id])
-    .map(f => `<span class="summary-tag"><span class="tag-icon">${f.icon}</span>${f.tag}</span>`)
-    .join('');
+  const tags = [];
+
+  // Handling: show Drop-Off if checked, otherwise show White Glove (assumed default) as dashed/muted
+  if (formData.dropOff) {
+    tags.push(`<span class="summary-tag"><span class="tag-icon">📦</span>Drop-Off</span>`);
+  } else {
+    tags.push(`<span class="summary-tag default"><span class="tag-icon">🧤</span>White Glove</span>`);
+  }
+
+  // Scheduling
+  if (formData.firstStop) tags.push(`<span class="summary-tag"><span class="tag-icon">🥇</span>1st Stop</span>`);
+  if (formData.lastStop)  tags.push(`<span class="summary-tag"><span class="tag-icon">🏁</span>Last Stop</span>`);
+
+  // Memos
+  if (formData.deliveryMemo) tags.push(`<span class="summary-tag"><span class="tag-icon">📋</span>Delivery</span>`);
+  if (formData.pickUpMemo)   tags.push(`<span class="summary-tag"><span class="tag-icon">♻️</span>Pick-up</span>`);
+
+  const activeTags = tags.join('');
 
   // Build text details
   const details = [];
-  if (formData.equipRemoval && formData.equipRemovalDetail) {
-    details.push(`<div class="summary-detail">♻️ <strong>Removal:</strong> ${escHtml(formData.equipRemovalDetail)}</div>`);
+  if (formData.deliveryMemo && formData.deliveryMemoDetail) {
+    details.push(`<div class="summary-detail">📋 <strong>Delivery:</strong> ${escHtml(formData.deliveryMemoDetail)}</div>`);
+  }
+  if (formData.pickUpMemo && formData.pickUpMemoDetail) {
+    details.push(`<div class="summary-detail">♻️ <strong>Pick-up:</strong> ${escHtml(formData.pickUpMemoDetail)}</div>`);
   }
   if (formData.customerPhone) {
     details.push(`<div class="summary-detail">📞 <strong>Phone:</strong> ${escHtml(formData.customerPhone)}</div>`);
@@ -428,8 +500,6 @@ function renderSummary() {
   if (formData.specialRequest) {
     details.push(`<div class="summary-detail">📝 <strong>Note:</strong> ${escHtml(formData.specialRequest)}</div>`);
   }
-
-  const hasContent = activeTags || details.length > 0;
 
   document.getElementById('app').innerHTML = `
     <div class="summary">
@@ -442,10 +512,8 @@ function renderSummary() {
           <button class="btn-sm" onclick="editForm()">✎ Edit</button>
         </div>
       </div>
-      ${hasContent ? `
-        ${activeTags ? `<div class="summary-tags">${activeTags}</div>` : ''}
-        ${details.join('')}
-      ` : `<div class="summary-detail" style="color:var(--sub);font-style:italic">No flags or notes — click Edit to add</div>`}
+      <div class="summary-tags">${activeTags}</div>
+      ${details.length > 0 ? details.join('') : ''}
     </div>`;
 
   if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
@@ -460,7 +528,8 @@ function renderForm() {
     ? new Date(formData.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
     : null;
 
-  const checkRows = FLAGS.map(f => {
+  // Build checkbox rows grouped by section
+  function buildCheckRow(f) {
     const isActive = formData[f.id];
     const isDisabled = !isActive && f.group && FLAGS.some(other =>
       other.group === f.group && other.id !== f.id && formData[other.id]
@@ -469,10 +538,12 @@ function renderForm() {
     const conditionalField = f.hasTextField ? `
       <div class="conditional-field ${isActive ? 'visible' : ''}" id="cond-${f.id}">
         <input class="form-input" type="text" id="${f.id}Detail"
-          placeholder="Describe items to remove (e.g., 2 old refrigeration units)"
+          placeholder="${escAttr(f.textPlaceholder || '')}"
           value="${escAttr(formData[f.id + 'Detail'] || '')}"
+          oninput="this.classList.remove('error'); var v=document.getElementById('val-${f.id}'); if(v) v.classList.remove('show');"
         />
-      </div>` : '';
+      </div>
+      ${f.textRequired ? `<div class="validation-msg" id="val-${f.id}">⚠ Please describe — this helps the manager plan the route</div>` : ''}` : '';
 
     return `
       <div class="check-row ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}"
@@ -484,7 +555,16 @@ function renderForm() {
         <span class="check-sub">${f.sub}</span>
       </div>
       ${conditionalField}`;
-  }).join('');
+  }
+
+  const handlingFlags = FLAGS.filter(f => f.section === 'handling').map(buildCheckRow).join('');
+  const schedulingFlags = FLAGS.filter(f => f.section === 'scheduling').map(buildCheckRow).join('');
+  const memoFlags = FLAGS.filter(f => f.section === 'memos').map(buildCheckRow).join('');
+
+  // White Glove assumed note
+  const wgNote = !formData.dropOff
+    ? `<div style="font-size:10px;color:var(--sub);padding:2px 8px 4px 46px;font-style:italic">🧤 White Glove assumed if unchecked</div>`
+    : '';
 
   document.getElementById('app').innerHTML = `
     <div class="hdr">
@@ -499,8 +579,15 @@ function renderForm() {
     </div>
 
     <div class="form-wrap">
-      <div class="section-label">Delivery Instructions</div>
-      ${checkRows}
+      <div class="section-label">Handling</div>
+      ${handlingFlags}
+      ${wgNote}
+
+      <div class="section-label">Scheduling Preference</div>
+      ${schedulingFlags}
+
+      <div class="section-label">Memos</div>
+      ${memoFlags}
 
       <div class="section-label" style="margin-top:14px">Contact</div>
       <div class="field-row">
@@ -511,10 +598,10 @@ function renderForm() {
         />
       </div>
 
-      <div class="section-label" style="margin-top:14px">Special Request</div>
+      <div class="section-label" style="margin-top:14px">Special Instructions</div>
       <div class="field-row">
         <textarea class="form-textarea" id="specialRequest"
-          placeholder="Bring ID, go to loading dock, email invoice only, etc."
+          placeholder="Access instructions, time constraints, on-site service tasks, etc."
         >${escHtml(formData.specialRequest || '')}</textarea>
       </div>
     </div>
@@ -546,6 +633,42 @@ function escHtml(str) {
 }
 function escAttr(str) {
   return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ════════════════════════════════════════════════════════
+// v0.4 backward compatibility — migrate old pluginData
+// ════════════════════════════════════════════════════════
+function migrateV04Data(saved) {
+  // v0.4 had: whiteGlove (bool), equipRemoval (bool), equipRemovalDetail (string)
+  // v0.5:     dropOff (bool),    pickUpMemo (bool),   pickUpMemoDetail (string)
+  //
+  // Migration logic:
+  // - whiteGlove:true in v0.4 → dropOff:false in v0.5 (White Glove is now the default)
+  // - dropOff:true stays dropOff:true
+  // - equipRemoval → pickUpMemo, equipRemovalDetail → pickUpMemoDetail
+  // - New fields (deliveryMemo, deliveryMemoDetail) default to false/''
+
+  if ('equipRemoval' in saved) {
+    saved.pickUpMemo = saved.equipRemoval;
+    saved.pickUpMemoDetail = saved.equipRemovalDetail || '';
+    delete saved.equipRemoval;
+    delete saved.equipRemovalDetail;
+  }
+
+  // whiteGlove no longer stored — drop it
+  if ('whiteGlove' in saved) {
+    // If whiteGlove was true and dropOff was false, that's now the default (no action)
+    // If whiteGlove was false and dropOff was true, dropOff stays true
+    delete saved.whiteGlove;
+  }
+
+  // Ensure new fields exist
+  if (!('deliveryMemo' in saved)) saved.deliveryMemo = false;
+  if (!('deliveryMemoDetail' in saved)) saved.deliveryMemoDetail = '';
+  if (!('pickUpMemo' in saved)) saved.pickUpMemo = false;
+  if (!('pickUpMemoDetail' in saved)) saved.pickUpMemoDetail = '';
+
+  return saved;
 }
 
 // ════════════════════════════════════════════════════════
@@ -614,7 +737,9 @@ async function boot() {
     // Load saved data regardless (for summary view on reopen)
     const saved = await t.get('card', 'shared', CFG.STORAGE_KEY);
     if (saved) {
-      Object.assign(formData, saved);
+      // Migrate v0.4 data if needed
+      const migrated = migrateV04Data(saved);
+      Object.assign(formData, migrated);
     }
 
     // If data was previously saved, show summary view on reopen
