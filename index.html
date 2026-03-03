@@ -314,7 +314,6 @@ async function checkRS() {
   try {
     const rsFieldId = await findRSFieldId();
     if (!rsFieldId) {
-      // Graceful fail: can't find RS field on this board — show form anyway
       console.warn('RS field not found on board — showing form (graceful fail)');
       return true;
     }
@@ -325,8 +324,31 @@ async function checkRS() {
     return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
   } catch (e) {
     console.warn('Could not check RS field:', e);
-    // Graceful fail: if we can't check, show the form anyway
     return true;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// Check RS via REST API (bypasses SDK cache, used by poller)
+// ════════════════════════════════════════════════════════
+let cachedCardId = null;
+
+async function checkRS_REST() {
+  try {
+    const rsFieldId = await findRSFieldId();
+    if (!rsFieldId) return true; // graceful fail
+
+    if (!cachedCardId) {
+      const card = await t.card('id');
+      cachedCardId = card.id;
+    }
+
+    const cfItems = await api(`/cards/${cachedCardId}/customFieldItems`);
+    const rsField = cfItems.find(cf => cf.idCustomField === rsFieldId);
+    return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
+  } catch (e) {
+    console.warn('REST RS check failed:', e);
+    return hasRS; // keep current state on error
   }
 }
 
@@ -778,13 +800,16 @@ async function boot() {
 
     render();
 
-    // Register render callback — Trello fires this when card data changes
-    // Re-checks RS so form appears without page refresh
-    t.render(async function() {
-      const wasRS = hasRS;
-      hasRS = await checkRS();
-      if (hasRS !== wasRS) render();
-    });
+    // Poll for RS changes via REST API (SDK cache doesn't update on field edits)
+    // Check every 3s. findRSFieldId() + cardId both cached — only 1 API call per poll.
+    if (window._rsPoller) clearInterval(window._rsPoller);
+    window._rsPoller = setInterval(async () => {
+      try {
+        const wasRS = hasRS;
+        hasRS = await checkRS_REST();
+        if (hasRS !== wasRS) render();
+      } catch (e) { /* silent */ }
+    }, 3000);
 
   } catch (e) {
     console.error('Boot error:', e);
