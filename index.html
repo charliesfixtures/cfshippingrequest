@@ -1,638 +1,4355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CF Shipping Request</title>
-<script src="https://p.trellocdn.com/power-up.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CF Dispatch</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Inter+Tight:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --bg: transparent;
-  --row-bg: transparent;
-  --row-hover: rgba(0,0,0,0.06);
-  --border: rgba(0,0,0,0.12);
-  --text: #172b4d;
-  --sub: #6b778c;
-  --accent: #5b8dee;
-  --warn: #e6a817;
-  --danger: #e54545;
-  --success: #11c987;
-  --radius: 8px;
-  --input-bg: #f4f5f7;
-  --dropdown-bg: #ffffff;
-  --check-active: #5b8dee;
-  --check-inactive: rgba(0,0,0,0.12);
+  --accent:  #f0c93a;
+  --success: #6ecf96;
+  --danger:  #e07a5f;
+  --info:    #5b9cf6;
+  --mon: #f0c93a; --tue: #5b9cf6; --wed: #6ecf96; --thu: #e07a5f; --fri: #b87fff;
+  --glass: rgba(200,195,185,0.5);
+  --glass-border: rgba(255,255,255,0.35);
+  --blur: blur(40px) saturate(1.8) brightness(1.1);
+  --card-bg: rgba(180,175,165,0.35);
+  --card-border: rgba(255,255,255,0.25);
+  --text: rgba(0,0,0,0.85);
+  --text2: rgba(0,0,0,0.58);
+  --text3: rgba(0,0,0,0.35);
+  --radius: 12px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --row-hover: #252839;
-    --border: #2d3148;
-    --text: #dde1f0;
-    --sub: #7880a0;
-    --input-bg: #0d0f14;
-    --dropdown-bg: #0d0f14;
-    --check-active: #5b8dee;
-    --check-inactive: #2d3148;
-  }
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
 
-html { overflow: hidden; }
 body {
-  font-family: 'Inter', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  padding: 0; margin: 0;
-  overflow: visible;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ── Auth screen ── */
-.auth-screen { padding: 16px; background: var(--input-bg); border-radius: var(--radius); margin: 8px; }
-.auth-screen p { font-size: 12px; color: var(--sub); line-height: 1.7; margin-bottom: 12px; }
-.auth-screen a { color: var(--accent); }
-.auth-textarea { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-family: monospace; font-size: 11px; resize: none; height: 60px; margin-bottom: 8px; }
-.auth-textarea:focus { outline: none; border-color: var(--accent); }
-
-/* ── Loading / error ── */
-.state { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--sub); font-family: monospace; }
-.state.error { color: var(--danger); }
-.spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 10px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── RS nudge (no RS filled yet) ── */
-.rs-nudge {
-  padding: 10px 12px;
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--sub);
-}
-.rs-nudge-icon { font-size: 14px; flex-shrink: 0; }
-.rs-nudge-text { line-height: 1.4; }
-.rs-nudge-text strong { color: var(--text); font-weight: 600; }
-
-/* ── Header ── */
-.hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
-}
-.hdr-left { display: flex; align-items: center; gap: 8px; }
-.hdr-title { font-size: 12px; font-weight: 600; color: var(--sub); letter-spacing: 0.6px; text-transform: uppercase; }
-.hdr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
-.hdr-status.saved { background: rgba(17,201,135,0.12); color: var(--success); }
-.hdr-status.unsaved { background: rgba(230,168,23,0.12); color: var(--warn); }
-
-.btn-sm {
-  padding: 4px 10px; border-radius: 5px; font-size: 11px;
-  font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--border); background: transparent; color: var(--sub);
-  transition: all 0.15s;
-}
-.btn-sm:hover { border-color: var(--sub); color: var(--text); }
-.btn-sm.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-sm.primary:hover { opacity: 0.88; }
-.btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
-
-/* ── Form sections ── */
-.form-wrap { padding: 8px 12px; }
-
-.section-label {
-  font-size: 10px; font-weight: 600; color: var(--sub);
-  letter-spacing: 0.5px; text-transform: uppercase;
-  margin: 10px 0 6px; padding-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-}
-.section-label:first-child { margin-top: 0; }
-
-/* ── Checkbox rows ── */
-.check-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 8px; border-radius: var(--radius);
-  cursor: pointer; transition: background 0.15s;
-  user-select: none;
-}
-.check-row:hover { background: var(--row-hover); }
-.check-row.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
-
-.check-box {
-  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
-  border: 2px solid var(--check-inactive);
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; background: transparent;
-}
-.check-row.active .check-box {
-  background: var(--check-active); border-color: var(--check-active);
-}
-.check-box::after {
-  content: '✓'; font-size: 11px; font-weight: 700; color: #fff;
-  opacity: 0; transition: opacity 0.15s;
-}
-.check-row.active .check-box::after { opacity: 1; }
-
-.check-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
-.check-label { font-size: 13px; font-weight: 500; color: var(--text); }
-.check-sub { font-size: 10px; color: var(--sub); margin-left: auto; white-space: nowrap; }
-
-/* ── Conditional text fields ── */
-.conditional-field {
-  margin: 0 0 4px 46px;
+  font-family: 'Inter Tight', sans-serif;
+  background: #e8e4dc;
+  color: rgba(0,0,0,0.85);
+  width: 100%;
+  height: 100%;
+  position: fixed;
   overflow: hidden;
-  max-height: 0; opacity: 0;
-  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
-}
-.conditional-field.visible {
-  max-height: 80px; opacity: 1; margin: 4px 0 8px 46px;
 }
 
-/* ── Text inputs ── */
-.form-input {
-  width: 100%; padding: 8px 10px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--input-bg);
-  color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px;
-  transition: border-color 0.15s;
-}
-.form-input:focus { outline: none; border-color: var(--accent); }
-.form-input::placeholder { color: var(--sub); opacity: 0.6; }
+/* ── HEADER ──────────────────────────────────────────── */
+.header { display: none; }
 
-.form-textarea {
-  width: 100%; padding: 8px 10px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--input-bg);
-  color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px;
-  resize: vertical; min-height: 48px; max-height: 120px;
-  transition: border-color 0.15s;
-}
-.form-textarea:focus { outline: none; border-color: var(--accent); }
-.form-textarea::placeholder { color: var(--sub); opacity: 0.6; }
-
-.field-row { margin-bottom: 8px; }
-.field-label {
-  font-size: 11px; font-weight: 500; color: var(--sub);
-  margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
-/* ── Footer ── */
-.footer {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px 12px; margin-top: 6px;
-  border-top: 1px solid var(--border);
-}
-.footer-info { font-size: 10px; color: var(--sub); }
+.logo span { color: rgba(0,0,0,0.35); font-weight: 400; }
 
-/* ── Status message ── */
-.status-msg { text-align: center; font-size: 11px; font-family: monospace; padding: 4px 12px 10px; min-height: 20px; color: var(--success); }
-.status-msg.error { color: var(--danger); }
-
-/* ── Summary view (post-save compact) ── */
-.summary {
-  padding: 10px 12px;
+.sync-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
 }
-.summary-hdr {
-  display: flex; align-items: center; justify-content: space-between;
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.btn-icon {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(200,195,185,0.5);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  color: rgba(0,0,0,0.45);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: all 0.15s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.btn-icon:hover { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.7); border-color: rgba(255,255,255,0.45); }
+
+/* ── DRIVER STATUS BAR ───────────────────────────────── */
+.driver-bar { display: none; }
+
+.driver-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.driver-chip.unavailable {
+  opacity: 0.6;
+  border-color: var(--danger);
+  background: rgba(224,122,95,0.06);
+}
+
+.driver-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0,0,0,0.1);
+}
+
+.driver-chip.unavailable .driver-avatar { filter: grayscale(60%); }
+
+.driver-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0,0,0,0.7);
+}
+
+.driver-status {
+  font-size: 10px;
+  font-family: 'Inter Tight', sans-serif;
+  color: rgba(0,0,0,0.42);
+}
+
+.driver-chip.unavailable .driver-status { color: var(--danger); }
+
+.driver-bar-sep { font-size: 10px; color: rgba(0,0,0,0.1); }
+
+/* ── LAYOUT ──────────────────────────────────────────── */
+.workspace {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* ── LEFT PANEL ──────────────────────────────────────── */
+.panel-left {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 270px;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100vh - 32px);
+  pointer-events: all;
+}
+
+.panel-header {
+  background: rgba(200,195,185,0.5);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius);
+  padding: 12px 14px 10px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.panel-title {
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(0,0,0,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
 }
-.summary-hdr-left { display: flex; align-items: center; gap: 8px; }
-.summary-hdr-left .hdr-title { font-size: 12px; font-weight: 600; color: var(--sub); letter-spacing: 0.6px; text-transform: uppercase; }
-.summary-hdr-left .hdr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; background: rgba(17,201,135,0.12); color: var(--success); }
 
-.summary-tags {
-  display: flex; flex-wrap: wrap; gap: 6px;
+.badge {
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+  color: rgba(0,0,0,0.45);
+  font-size: 10px;
+  font-family: 'Inter Tight', sans-serif;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.badge.has-items { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.55); }
+
+.panel-search {
+  position: relative;
+  margin-top: 6px;
+}
+
+.panel-search input {
+  width: 100%;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  padding: 7px 10px 7px 28px;
+  color: rgba(0,0,0,0.7);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.panel-search input:focus { border-color: rgba(0,0,0,0.2); }
+.panel-search input::placeholder { color: rgba(0,0,0,0.25); }
+
+.panel-search::before {
+  content: '🔍';
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: calc(100vh - 140px);
+  padding: 6px 0;
+  background: transparent;
+}
+
+.cards-list::-webkit-scrollbar { width: 4px; }
+.cards-list::-webkit-scrollbar-track { background: transparent; }
+.cards-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.14); border-radius: 2px; }
+
+/* Queue card */
+.queue-card {
+  background: rgba(200,195,185,0.5);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.queue-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.queue-card:active {
+  cursor: grabbing;
+}
+
+.queue-card.selected {
+  border-color: rgba(240,201,58,0.5);
+  background: rgba(240,201,58,0.08);
+}
+
+.queue-card.expanded {
+  background: rgba(170,165,155,0.45);
+}
+
+/* Warning border removed — amber algo strip text is sufficient cue */
+.queue-card.has-warning { }
+
+.queue-card.dragging { opacity: 0.4; transform: rotate(1deg); }
+
+.qc-title { font-size: 14px; font-weight: 700; color: rgba(0,0,0,0.55); margin-bottom: 6px; line-height: 1.25; padding-right: 38px; font-family: 'Inter Tight', sans-serif; }
+
+.qc-flags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 0 0; align-items: center; }
+
+.qc-tag {
+  font-size: 9px;
+  font-family: 'Inter Tight', sans-serif;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.05);
+  border: none;
+}
+
+/* Algo recommendation strip */
+.algo-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  margin: 8px 0 0 0;
+  background: rgba(0,0,0,0.03);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'Inter Tight', sans-serif;
+  color: rgba(0,0,0,0.45);
+  font-weight: 500;
+}
+.algo-strip .algo-icon { font-size: 10px; opacity: 0.6; }
+
+/* Requester avatar */
+.qc-avatar {
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+  position: absolute; top: 12px; right: 14px;
+  border: 1.5px solid rgba(0,0,0,0.1); opacity: 0.85; z-index: 5;
+}
+.qc-avatar-initials {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  position: absolute; top: 12px; right: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.4);
+  font-family: 'Inter Tight', sans-serif;
+}
+
+/* Expanded card content */
+.qc-expanded-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  font-family: 'Inter Tight', sans-serif;
+}
+.qc-expanded-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: rgba(0,0,0,0.42);
+  padding: 3px 0;
+  font-family: 'Inter Tight', sans-serif;
+}
+.qc-expanded-row .exp-icon {
+  font-size: 12px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.qc-expanded-row strong {
+  color: rgba(0,0,0,0.52);
+  font-weight: 600;
+}
+.qc-expanded-row em {
+  font-style: italic;
+}
+.qc-expanded-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.05);
+  margin: 6px 0;
+}
+.qc-expanded-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.qc-expanded-tags .exp-tag {
+  font-size: 9px;
+  padding: 2.5px 7px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: rgba(0,0,0,0.05);
+  color: rgba(0,0,0,0.4);
+  font-family: 'Inter Tight', sans-serif;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 32px 20px;
+  color: rgba(0,0,0,0.2);
+}
+
+.empty-state .icon { font-size: 28px; margin-bottom: 10px; }
+.empty-state .title { font-size: 12px; font-weight: 500; color: rgba(0,0,0,0.35); margin-bottom: 6px; }
+.empty-state .sub { font-size: 11px; line-height: 1.6; color: rgba(0,0,0,0.25); }
+
+/* ── CENTER MAP ───────────────────────────────────────── */
+.map-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Day layer toggles on map */
+.map-controls {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 2px;
+  z-index: 500;
+  background: rgba(200,195,185,0.5);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 28px;
+  padding: 4px;
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+  pointer-events: all;
+}
+
+.day-pill {
+  padding: 6px 11px;
+  border-radius: 22px;
+  font-size: 11px;
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  color: rgba(0,0,0,0.35);
+  user-select: none;
+  text-align: center;
+  line-height: 1.2;
+  position: relative;
+}
+
+.pill-day { display: block; letter-spacing: 0.04em; font-weight: 600; }
+.pill-date { display: block; font-size: 9px; color: rgba(0,0,0,0.2); margin-top: 1px; font-weight: 400; transition: color 0.2s; }
+
+.day-pill:hover { color: rgba(0,0,0,0.6); background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.06); }
+.day-pill:hover .pill-date { color: rgba(0,0,0,0.3); }
+.day-pill.active { color: rgba(0,0,0,0.75); font-weight: 700; }
+.day-pill.active:not([style]) { background: var(--accent); border-color: rgba(240,201,58,0.6); box-shadow: 0 2px 12px rgba(240,201,58,0.25), inset 0 1px 0 rgba(255,255,255,0.2); }
+.day-pill.active .pill-date { color: rgba(0,0,0,0.5); }
+
+/* ── RIGHT PANEL ──────────────────────────────────────── */
+.panel-right {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 290px;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100vh - 100px);
+  pointer-events: all;
+}
+
+/* Route day header (replaces day tabs in right panel) */
+.route-day-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(200,195,185,0.5);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+  flex-shrink: 0;
+}
+
+.route-day-info { flex: 1; padding-left: 4px; }
+.route-day-name { font-size: 16px; font-weight: 600; color: rgba(0,0,0,0.6); font-family: 'Inter Tight', sans-serif; }
+.staged-count-badge {
+  display: none;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.55);
+  font-size: 10px;
+  font-family: 'Inter Tight', sans-serif;
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.staged-count-badge.has-staged { display: inline-block; font-weight: 600; }
+
+.route-panel {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100vh - 160px);
+  padding: 2px 0;
+}
+
+.route-panel::-webkit-scrollbar { width: 4px; }
+.route-panel::-webkit-scrollbar-track { background: transparent; }
+.route-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.14); border-radius: 2px; }
+
+/* Truck section */
+.truck-section {
+  background: rgba(200,195,185,0.5);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.truck-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.truck-driver-img {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0,0,0,0.1);
+}
+
+/* Driver avatar wrap — clickable */
+.truck-driver-avatar-wrap {
+  position: relative;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.truck-driver-avatar-wrap:hover { transform: scale(1.08); }
+.truck-driver-avatar-wrap:hover .truck-driver-img { border-color: var(--accent); }
+.truck-driver-avatar-wrap.unavailable .truck-driver-img { filter: grayscale(50%); border-color: var(--danger); }
+
+.driver-unavail-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(200,195,185,0.8);
+}
+
+/* Driver placeholder — empty circle with person icon */
+.truck-driver-placeholder {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px dashed rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.truck-driver-placeholder:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(240,201,58,0.06);
+  transform: scale(1.08);
+}
+
+/* Truck section warning state when driver unavailable */
+.truck-section.driver-warn { border-color: rgba(224,122,95,0.2); }
+
+/* Driver picker enhancements */
+.driver-option.unavailable-option { opacity: 0.5; }
+.driver-option.unavailable-option:hover { opacity: 0.7; }
+.driver-placeholder-small {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: rgba(0,0,0,0.25);
+  flex-shrink: 0;
+}
+
+.truck-info { flex: 1; }
+.truck-name { font-size: 14px; font-weight: 700; color: rgba(0,0,0,0.6); font-family: 'Inter Tight', sans-serif; }
+.truck-label { font-size: 10.5px; color: rgba(0,0,0,0.35); font-family: 'Inter Tight', sans-serif; margin-top: 2px; }
+
+.capacity-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.cap-dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.1);
+  transition: background 0.2s;
+}
+
+.cap-dot.filled { background: var(--success); }
+.cap-dot.overflow { background: var(--danger); }
+
+.truck-lock-btn {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: transparent;
+  color: rgba(0,0,0,0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.truck-lock-btn:hover { background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.4); }
+.truck-lock-btn.locked { background: rgba(224,122,95,0.1); border-color: rgba(224,122,95,0.3); color: var(--danger); }
+
+.truck-section.truck-locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.truck-section.truck-locked .truck-header {
+  pointer-events: all;
+}
+.truck-section.truck-locked .truck-lock-btn {
+  pointer-events: all;
+}
+.truck-section.truck-locked .truck-empty {
+  color: rgba(180,90,40,0.45);
+  font-style: italic;
+}
+
+/* Stop items */
+.stops-list {
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+.stop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  transition: background 0.15s;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.stop-item:last-child { border-bottom: none; }
+.stop-item:hover { background: rgba(0,0,0,0.03); }
+
+.stop-num {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: rgba(0,0,0,0.4);
+  cursor: grab;
+}
+
+.stop-item[draggable="true"]:hover { cursor: grab; }
+
+.stop-content { flex: 1; min-width: 0; overflow: hidden; }
+.stop-name { font-size: 11px; font-weight: 600; color: rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.stop-meta { font-size: 10px; color: rgba(0,0,0,0.35); margin-top: 2px; display: flex; gap: 5px; flex-wrap: wrap; }
+
+.stop-flag {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Inter Tight', sans-serif;
+}
+
+.flag-first { background: rgba(79,142,255,0.15); color: var(--info); }
+.flag-wg { background: rgba(126,214,160,0.12); color: var(--success); }
+.flag-remove { background: rgba(224,122,95,0.12); color: var(--danger); }
+
+.stop-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.stop-item:hover .stop-actions { opacity: 1; }
+.stop-item.staged .stop-actions { opacity: 1; }
+
+.stop-btn {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.stop-btn:hover { background: rgba(0,0,0,0.1); color: rgba(0,0,0,0.7); }
+.stop-btn.remove:hover { background: rgba(224,122,95,0.1); border-color: rgba(224,122,95,0.3); color: var(--danger); }
+
+/* Route endpoints */
+.route-endpoint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: rgba(0,0,0,0.03);
+  font-size: 10px;
+  color: rgba(0,0,0,0.3);
+  font-family: 'Inter Tight', sans-serif;
+}
+
+.endpoint-icon { font-size: 12px; }
+
+/* Empty truck */
+.truck-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(0,0,0,0.25);
+  font-style: italic;
+}
+
+/* Commit button */
+.commit-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.commit-btn:hover { background: #f5d660; }
+.commit-btn:disabled { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.2); cursor: not-allowed; }
+
+/* ── DROP ZONE ── */
+.truck-section.drop-hover {
+  border-color: rgba(240,201,58,0.6);
+  background: rgba(240,201,58,0.06);
+  box-shadow: 0 0 0 2px rgba(240,201,58,0.2), 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.truck-section.drop-reject {
+  border-color: rgba(224,122,95,0.4);
+  background: rgba(224,122,95,0.04);
+}
+
+/* ── STAGED STOP (dragged but not committed) ── */
+.stop-item.staged {
+  border: 1.5px solid color-mix(in srgb, var(--day-color, #f0c93a) 60%, transparent);
+  border-radius: 10px;
+  margin: 4px 6px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--day-color, #f0c93a) 18%, transparent) 0%, color-mix(in srgb, var(--day-color, #f0c93a) 8%, transparent) 100%);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--day-color, #f0c93a) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.stop-item.staged .stop-num {
+  background: color-mix(in srgb, var(--day-color, #f0c93a) 35%, transparent);
+  border-color: color-mix(in srgb, var(--day-color, #f0c93a) 40%, transparent);
+  color: rgba(0,0,0,0.65);
+  font-weight: 700;
+}
+
+.stop-item.staged .stop-name {
+  color: rgba(80,55,0,0.85);
+  font-weight: 700;
+}
+
+.stop-item.staged .stop-meta {
+  color: rgba(100,70,0,0.5);
+}
+
+/* Per-card commit button — gray on golden card */
+.stop-commit-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.06);
+  color: rgba(0,0,0,0.55);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.stop-commit-btn:hover {
+  background: rgba(0,0,0,0.12);
+  color: rgba(0,0,0,0.8);
+  border-color: rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Edit/remove buttons on staged — also muted */
+.stop-item.staged .stop-btn {
+  border-color: rgba(160,120,0,0.15);
+  color: rgba(120,85,0,0.3);
+}
+.stop-item.staged .stop-btn:hover {
+  background: rgba(160,120,0,0.08);
+  color: rgba(100,70,0,0.6);
+}
+
+/* Staged timestamp row */
+.staged-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 0 36px;
+  font-size: 9.5px;
+  font-family: 'Inter Tight', sans-serif;
+  color: rgba(160,120,0,0.4);
+  letter-spacing: 0.01em;
+  flex-basis: 100%;
+}
+.staged-meta .staged-by {
+  font-weight: 600;
+  color: rgba(160,120,0,0.5);
+}
+.staged-meta .staged-time {
+  font-weight: 400;
+}
+
+/* Rider tag on queue cards */
+/* Free delivery toggle (inside expanded view) */
+.free-toggle {
+  font-size: 9px;
+  font-family: 'Inter Tight', sans-serif;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px dashed rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.02);
+  color: rgba(0,0,0,0.3);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: all 0.15s;
+}
+.free-toggle:hover {
+  background: rgba(120,100,220,0.08);
+  border-color: rgba(120,100,220,0.2);
+  color: rgba(100,80,180,0.6);
+}
+.free-toggle.active {
+  background: rgba(120,100,220,0.12);
+  border: 1px solid rgba(120,100,220,0.25);
+  color: rgba(100,80,180,0.8);
+  font-weight: 600;
+}
+
+/* FREE micro-badge inline with card title */
+.free-badge {
+  font-size: 7px;
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(120,100,220,0.12);
+  color: rgba(100,80,180,0.7);
+  border: 1px solid rgba(120,100,220,0.15);
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── COMMITTED STOP ── */
+.stop-item.committed {
+  border-left: 3px solid transparent;
+  background: none;
+}
+
+.stop-item.committed .stop-num {
+  display: none; /* Hidden — replaced by PFP */
+}
+
+/* Committed card: PFP replaces stop number */
+.committed-pfp-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+}
+.committed-pfp-wrap img {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--day-color, #999);
+}
+.committed-stop-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  min-width: 15px; height: 15px;
+  border-radius: 8px;
+  background: rgba(245,243,238,0.95);
+  color: rgba(0,0,0,0.45);
+  font-size: 8px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0,0,0,0.08);
+  font-family: 'Inter Tight', sans-serif;
+  padding: 0 3px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+/* Crown for first stop — top-left of PFP */
+.committed-crown {
+  position: absolute;
+  top: -10px;
+  left: -6px;
+  font-size: 15px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
+  z-index: 2;
+  line-height: 1;
+  transform: rotate(-18deg);
+}
+/* Fallback when no PFP — show a checkmark circle */
+.committed-pfp-fallback {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.03);
+  border: 2px solid var(--day-color, #999);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0,0,0,0.3);
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Staged card: pulsing stop number */
+@keyframes stagePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.92); }
+}
+.stop-item.staged .stop-num {
+  animation: stagePulse 2s ease-in-out infinite;
+}
+
+/* ── DRIVER PICKER ── */
+.driver-picker {
+  position: fixed;
+  z-index: 800;
+  background: var(--card-bg);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+.driver-picker-title {
+  font-size: 10px;
+  font-family: 'Inter Tight', sans-serif;
+  color: rgba(0,0,0,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
   margin-bottom: 6px;
 }
-.summary-tag {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px; border-radius: 5px;
-  font-size: 11px; font-weight: 500;
-  background: var(--input-bg); color: var(--text);
-  border: 1px solid var(--border);
-}
-.summary-tag .tag-icon { font-size: 12px; }
 
-.summary-detail {
-  font-size: 11px; color: var(--sub); line-height: 1.5;
-  margin-bottom: 4px; padding-left: 2px;
+.driver-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-.summary-detail strong { color: var(--text); font-weight: 500; }
+
+.driver-option:hover { background: rgba(0,0,0,0.05); }
+.driver-option.selected { background: rgba(240,201,58,0.08); }
+
+.driver-option img {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.driver-option-info { flex: 1; }
+.driver-option-name { font-size: 12px; font-weight: 600; color: rgba(0,0,0,0.7); }
+.driver-option-status { font-size: 10px; color: rgba(0,0,0,0.4); margin-top: 1px; }
+.driver-option-status.away { color: var(--danger); }
+.driver-option-status.soon { color: var(--accent); }
+
+/* ── MODAL ───────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: rgba(220,215,205,0.92);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 14px;
+  padding: 24px;
+  width: 420px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalIn 0.2s ease;
+  color: rgba(0,0,0,0.7);
+}
+
+@keyframes modalIn {
+  from { transform: scale(0.95) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.modal-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.modal-sub { font-size: 12px; color: rgba(0,0,0,0.42); margin-bottom: 20px; }
+
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 11px; color: rgba(0,0,0,0.42); margin-bottom: 6px; font-weight: 500; display: block; }
+
+.form-select, .form-input {
+  width: 100%;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: rgba(0,0,0,0.7);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  appearance: none;
+}
+
+.form-select:focus, .form-input:focus { border-color: var(--info); }
+
+.modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.6);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-cancel:hover { background: rgba(0,0,0,0.06); }
+
+.btn-confirm {
+  flex: 2;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-confirm:hover { background: #f5d660; }
+
+/* First stop section in modal */
+.first-stop-section {
+  background: rgba(79,142,255,0.06);
+  border: 1px solid rgba(79,142,255,0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.first-stop-title { font-size: 11px; color: var(--info); font-weight: 600; margin-bottom: 4px; }
+.first-stop-desc { font-size: 11px; color: rgba(0,0,0,0.42); }
+
+.first-stop-btns { display: flex; gap: 6px; margin-top: 8px; }
+.fs-btn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.42);
+  text-align: center;
+}
+
+.fs-btn.selected { background: var(--info); border-color: var(--info); color: #fff; }
+.fs-btn.revoke.selected { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.truck-c-wrap {
+  padding: 0 8px 6px;
+  flex-shrink: 0;
+}
+
+.truck-c-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 1px dashed rgba(0,0,0,0.15);
+  background: rgba(200,195,185,0.35);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  color: rgba(0,0,0,0.3);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.truck-c-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── BRAND FLOAT ── */
+.brand-float {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 400;
+  pointer-events: none;
+}
+
+.brand-logo {
+  height: 30px;
+  display: block;
+  opacity: 0.5;
+  filter: brightness(0.45);
+}
+
+.brand-byline {
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 8.5px;
+  color: rgba(0,0,0,0.22);
+  letter-spacing: 0.04em;
+}
+
+/* ── SUGGESTION BANNER ── */
+.suggestion-banner {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 600;
+  background: rgba(220,215,205,0.88);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  border: 1px solid rgba(240,201,58,0.25);
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1), 0 0 0 1px rgba(240,201,58,0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  max-width: 520px;
+}
+
+.suggestion-banner.visible {
+  opacity: 1;
+  pointer-events: all;
+  transform: translateX(-50%) translateY(0);
+}
+
+.suggestion-text { flex: 1; }
+.suggestion-label { font-size: 11px; font-family: 'Inter Tight', sans-serif; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.suggestion-detail { font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.7); }
+.suggestion-meta { font-size: 11px; color: rgba(0,0,0,0.38); margin-top: 2px; }
+.suggestion-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.sug-btn { padding: 6px 12px; border-radius: 7px; font-size: 11px; font-family: 'Inter Tight', sans-serif; font-weight: 600; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); transition: all 0.15s; }
+.sug-btn.confirm { background: rgba(240,201,58,0.15); border-color: rgba(240,201,58,0.35); color: var(--accent); }
+.sug-btn.confirm:hover { background: rgba(240,201,58,0.25); }
+.sug-btn.adjust { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.55); }
+.sug-btn.adjust:hover { background: rgba(0,0,0,0.08); color: rgba(0,0,0,0.7); }
+.sug-btn.dismiss { background: transparent; border-color: rgba(0,0,0,0.08); color: rgba(0,0,0,0.3); padding: 6px 8px; }
+.sug-btn.dismiss:hover { color: var(--danger); border-color: rgba(224,122,95,0.3); }
+
+/* ── ACTION FLOAT ── */
+.action-float {
+  position: fixed;
+  top: 16px;
+  right: 320px;
+  z-index: 600;
+  display: flex;
+  gap: 6px;
+}
+
+/* ── TOAST ───────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(220,215,205,0.92);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: rgba(0,0,0,0.7);
+  max-width: 280px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toastIn 0.3s ease;
+  pointer-events: all;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+@keyframes toastIn {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast.success { border-color: rgba(126,214,160,0.3); }
+.toast.error { border-color: rgba(224,122,95,0.3); }
+.toast.info { border-color: rgba(79,142,255,0.3); }
+
+/* ── LEAFLET CUSTOM PINS ─────────────────────────────── */
+
+.unscheduled-pin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(230,100,80,0.75);
+  border: 2.5px solid rgba(255,255,255,0.9);
+  box-shadow: 0 0 0 3px rgba(230,100,80,0.25);
+  cursor: pointer;
+  transition: all 0.2s;
+  animation: pulseDot 2s infinite;
+}
+
+.unscheduled-pin.selected {
+  width: 20px;
+  height: 20px;
+  background: rgba(230,100,80,0.9);
+  border-color: #fff;
+  margin: -3px;
+  animation: pulseSelected 1s infinite;
+  box-shadow: 0 0 0 5px rgba(230,100,80,0.25), 0 0 0 10px rgba(230,100,80,0.1);
+}
+
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230,100,80,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(230,100,80,0); }
+}
+
+/* ASAP urgency — faster pulse, slightly bigger */
+.unscheduled-pin.asap {
+  width: 18px;
+  height: 18px;
+  background: rgba(220,60,40,0.8);
+  border: 2.5px solid rgba(255,255,255,0.95);
+  animation: pulseAsap 1s infinite;
+}
+
+@keyframes pulseAsap {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,60,40,0.6); }
+  50% { box-shadow: 0 0 0 10px rgba(220,60,40,0); }
+}
+
+@keyframes pulseSelected {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(230,100,80,0.5), 0 0 0 6px rgba(230,100,80,0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(230,100,80,0.3), 0 0 0 12px rgba(230,100,80,0.1); }
+}
+
+.landmark-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Landmark rich hover tooltip */
+.landmark-tip {
+  background: rgba(235,230,220,0.94) !important;
+  backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+  padding: 14px 16px !important;
+  font-family: 'Inter Tight', sans-serif;
+  line-height: 1.55;
+}
+.landmark-tip::before { border-right-color: rgba(235,230,220,0.94) !important; }
+.lm-t { font-size: 14px; font-weight: 700; color: rgba(0,0,0,0.65); margin-bottom: 5px; }
+.lm-r { font-size: 12px; color: rgba(0,0,0,0.4); margin: 2px 0; }
+.lm-h { font-size: 11px; color: rgba(0,0,0,0.35); margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.06); }
+
+/* Route line animation — Truck A: slow dashes, Truck B: fast dots */
+@keyframes flowDashA {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -28; }
+}
+@keyframes flowDashB {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -16; }
+}
+.route-line {
+  /* Static by default — animation applied via .route-animate-a / .route-animate-b */
+}
+.route-line.route-animate-a {
+  animation: flowDashA 1s linear infinite;
+  opacity: 0.75;
+}
+.route-line.route-animate-b {
+  animation: flowDashB 0.35s linear infinite;
+  opacity: 0.75;
+}
+.route-line.route-dim {
+  opacity: 0.2 !important;
+  animation: none !important;
+}
+
+/* Map dot hover tooltip (pending + scheduled) */
+.dot-tip {
+  background: rgba(235,230,220,0.94) !important;
+  backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+  padding: 10px 12px !important;
+  font-family: 'Inter Tight', sans-serif;
+  line-height: 1.5;
+}
+.dot-tip::before { border-right-color: rgba(235,230,220,0.94) !important; }
+.dt-name { font-size: 12px; font-weight: 700; color: rgba(0,0,0,0.65); margin-bottom: 2px; }
+.dt-owner { font-size: 10.5px; color: rgba(0,0,0,0.4); }
+.dt-status { font-size: 10px; margin-top: 3px; padding-top: 3px; border-top: 1px solid rgba(0,0,0,0.06); }
+.dt-pending { color: rgba(230,100,80,0.7); font-weight: 600; }
+.dt-scheduled { color: rgba(76,155,60,0.8); font-weight: 600; }
+
+/* Driver info tooltip — glass style, pops below avatar */
+.driver-tip-wrap { position: relative; display: inline-block; }
+.driver-tip-wrap .driver-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: rgba(235,230,220,0.94);
+  backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  padding: 10px 14px;
+  font-family: 'Inter Tight', sans-serif;
+  white-space: nowrap;
+  z-index: 500;
+  pointer-events: none;
+}
+.driver-tip-wrap:hover .driver-tip { display: block; }
+.driver-tip .dt-driver-name { font-size: 13px; font-weight: 700; color: rgba(0,0,0,0.65); margin-bottom: 4px; }
+.driver-tip .dt-driver-row { font-size: 11px; color: rgba(0,0,0,0.45); line-height: 1.6; }
+
+.landmark-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 2px solid rgba(255,255,255,0.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* ── SETTINGS PANEL ──────────────────────────────────── */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-overlay.open { display: flex; }
+
+.settings-panel {
+  background: rgba(220,215,205,0.92);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 14px;
+  padding: 28px;
+  width: 440px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.settings-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.settings-sub { font-size: 12px; color: rgba(0,0,0,0.42); margin-bottom: 24px; }
+
+.settings-section { margin-bottom: 20px; }
+
+.settings-section-title {
+  font-size: 10px;
+  font-family: 'Inter Tight', sans-serif;
+  color: rgba(0,0,0,0.42);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.connect-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 4px;
+}
+
+.connect-btn:hover { background: #f5d660; }
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Confirm dialog */
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-dialog.open { display: flex; }
+
+.confirm-box {
+  background: rgba(220,215,205,0.92);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 12px;
+  padding: 24px;
+  width: 340px;
+  max-width: 90vw;
+  animation: modalIn 0.2s ease;
+}
+
+.confirm-icon { font-size: 28px; margin-bottom: 12px; }
+.confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.confirm-msg { font-size: 12px; color: rgba(0,0,0,0.42); line-height: 1.5; margin-bottom: 20px; }
+
+.confirm-actions { display: flex; gap: 8px; }
+
+.confirm-cancel {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.6);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.confirm-ok {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Tooltip popup */
+.leaflet-popup-content-wrapper {
+  background: rgba(220,215,205,0.92) !important;
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.05) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.05) !important;
+  border: 1px solid rgba(255,255,255,0.4) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3) !important;
+  color: rgba(0,0,0,0.7) !important;
+}
+
+.leaflet-popup-tip-container { display: none !important; }
+.leaflet-popup-close-button { color: rgba(0,0,0,0.3) !important; font-size: 16px !important; top: 8px !important; right: 10px !important; }
+.leaflet-popup-close-button:hover { color: rgba(0,0,0,0.7) !important; }
+.leaflet-popup-content { margin: 14px 16px !important; font-family: 'Inter Tight', sans-serif !important; min-width: 200px; }
+
+.popup-title { font-size: 13px; font-weight: 700; color: rgba(0,0,0,0.7); margin-bottom: 10px; line-height: 1.3; font-family: 'Syne', sans-serif; }
+.popup-divider { height: 1px; background: rgba(0,0,0,0.06); margin: 8px 0; }
+.popup-row { font-size: 11px; color: rgba(0,0,0,0.45); margin-bottom: 5px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+.popup-row strong { color: rgba(0,0,0,0.6); font-weight: 500; }
+.popup-row .popup-icon { opacity: 0.6; flex-shrink: 0; }
+.popup-tag { display: inline-block; font-size: 9px; font-family: 'Inter Tight', sans-serif; padding: 2px 7px; border-radius: 4px; margin: 2px 2px 0 0; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.popup-tag.first { background: rgba(91,156,246,0.18); color: #5b9cf6; border: 1px solid rgba(91,156,246,0.25); }
+.popup-tag.flexible { background: rgba(110,207,150,0.15); color: #6ecf96; border: 1px solid rgba(110,207,150,0.2); }
+.popup-tag.asap { background: rgba(240,201,58,0.15); color: #f0c93a; border: 1px solid rgba(240,201,58,0.2); }
+.popup-tag.remove { background: rgba(224,122,95,0.15); color: #e07a5f; border: 1px solid rgba(224,122,95,0.2); }
+.popup-tag.service { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.42); border: 1px solid rgba(0,0,0,0.08); }
+.popup-driver-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.popup-driver-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0,0,0,0.1); flex-shrink: 0; }
+.popup-driver-info { flex: 1; }
+.popup-driver-name { font-size: 12px; font-weight: 600; color: rgba(0,0,0,0.65); }
+.popup-driver-phone { font-size: 11px; color: rgba(0,0,0,0.38); margin-top: 1px; }
+.popup-link { font-size: 11px; color: rgba(240,201,58,0.8); text-decoration: none; margin-top: 8px; display: inline-block; transition: color 0.15s; }
+.popup-link:hover { color: #f0c93a; text-decoration: underline; }
 </style>
 </head>
 <body>
-<div id="app"><div class="state"><div class="spinner"></div>Loading...</div></div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+  <!-- LEFT PANEL -->
+  <div class="panel-left">
+    <div class="panel-header">
+      <div class="panel-title">
+        Pending
+        <span class="badge" id="queue-badge">0</span>
+      </div>
+      <div class="panel-search">
+        <input type="text" placeholder="Search cards..." id="queue-search" oninput="filterQueue()" />
+      </div>
+    </div>
+    <div class="cards-list" id="cards-list"
+      ondragover="handleQueueDragOver(event)"
+      ondragleave="handleQueueDragLeave(event)"
+      ondrop="handleQueueDrop(event)">
+      <div class="empty-state">
+        <div class="icon">📭</div>
+        <div class="title">No pending requests</div>
+        <div class="sub">Cards will appear here when salespeople fill the RS field in Trello</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER MAP -->
+  <div class="map-container">
+    <div id="map"></div>
+
+    <!-- Day layer pills -->
+    <div class="map-controls" id="map-controls">
+      <!-- populated dynamically -->
+    </div>
+
+    <!-- Suggestion banner -->
+    <div class="suggestion-banner" id="suggestion-banner">
+      <div class="suggestion-text">
+        <div class="suggestion-label">💡 Suggestion</div>
+        <div class="suggestion-detail" id="sug-detail">—</div>
+        <div class="suggestion-meta" id="sug-meta">—</div>
+      </div>
+      <div class="suggestion-actions">
+        <button class="sug-btn confirm" onclick="confirmSuggestion()">Confirm</button>
+        <button class="sug-btn adjust" onclick="openAssignModal(null, true)">Adjust</button>
+        <button class="sug-btn dismiss" onclick="dismissSuggestion()">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel-right">
+    <div class="route-panel" id="route-panel">
+      <!-- populated by JS -->
+    </div>
+    <div class="truck-c-wrap" id="truck-c-wrap">
+      <button class="truck-c-btn" id="truck-b-btn" onclick="toggleTruckB()">+ Add Truck B</button>
+      <button class="truck-c-btn" id="truck-c-btn" onclick="toggleTruckC()" style="display:none">+ Add Route C</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden driver-chips container (used by renderDriverBar) -->
+<div id="driver-chips" style="display:none;"></div>
+
+<!-- ASSIGN MODAL -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Schedule Stop</div>
+    <div class="modal-sub" id="modal-sub">Assign this card to a route</div>
+
+    <div class="first-stop-section" id="first-stop-section" style="display:none">
+      <div class="first-stop-title">🥇 First Stop Requested</div>
+      <div class="first-stop-desc" id="first-stop-desc">Customer has requested first stop delivery.</div>
+      <div class="first-stop-btns">
+        <div class="fs-btn" id="fs-approve" onclick="setFirstStopStatus('approved')">✓ Approve</div>
+        <div class="fs-btn revoke" id="fs-revoke" onclick="setFirstStopStatus('revoked')">✗ Revoke</div>
+      </div>
+    </div>
+
+    <div class="modal-row">
+      <div class="form-group">
+        <label class="form-label">Day</label>
+        <select class="form-select" id="modal-day">
+          <option value="">Select day...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Truck</label>
+        <select class="form-select" id="modal-truck">
+          <option value="A">Route A</option>
+          <option value="B">Route B</option>
+          <option value="C">Route C</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Driver</label>
+      <select class="form-select" id="modal-driver">
+        <option value="">Select driver...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Stop Position</label>
+      <select class="form-select" id="modal-stop">
+        <option value="auto">Auto (recommended)</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('assign-modal')">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAssign()">Schedule Stop</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS OVERLAY -->
+<div class="settings-overlay" id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-title">⚙ Settings</div>
+    <div class="settings-sub">CF Dispatch Tool — Configuration</div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Trello Connection</div>
+      <div class="form-group">
+        <label class="form-label">API Token (your personal Trello token)</label>
+        <input type="password" class="form-input" id="settings-token" placeholder="Paste your Trello token..." />
+      </div>
+      <div id="connection-status-wrap" style="display:none">
+        <div class="connection-status" id="connection-status">
+          <span id="conn-status-icon">✅</span>
+          <span id="conn-status-text">Connected</span>
+        </div>
+      </div>
+      <button class="connect-btn" onclick="saveSettings()">Save & Connect</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">About</div>
+      <div style="font-size:12px;color:rgba(0,0,0,0.42);line-height:1.7">
+        <div>📋 Board: CF ASANA</div>
+        <div>🗓 Schedule window: 2 weeks</div>
+        <div>🚛 Stop cap: 4 per truck</div>
+        <div>📍 Warehouse: 3063 E Fruitland Ave, Vernon</div>
+        <div>🏠 HQ: 2251 Venice Blvd, Los Angeles</div>
+      </div>
+    </div>
+
+    <button class="connect-btn" style="background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.6);border:1px solid rgba(0,0,0,0.1);" onclick="closeModal('settings-overlay')">Close</button>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirm-title">Are you sure?</div>
+    <div class="confirm-msg" id="confirm-msg">This action cannot be undone.</div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closeModal('confirm-dialog')">Cancel</button>
+      <button class="confirm-ok" id="confirm-ok-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
 
 <script>
 // ════════════════════════════════════════════════════════
-// CONFIG
+// CONSTANTS & CONFIG
 // ════════════════════════════════════════════════════════
-const CFG = {
-  API_KEY: '53abc1f4686798eadbeb8f91ea79c9bb',
-  STORAGE_KEY: 'shippingRequest',
-  RS_FIELD_ID: '699deaf8ae2995aa04f30441',
+const API_KEY = 'TRELLO_API_KEY_PLACEHOLDER';
+let TOKEN = localStorage.getItem('cf_dispatch_token') || 'TRELLO_TOKEN_PLACEHOLDER';
+
+const BOARD_ID = '699600604764a1cd3d99dba1'; // TEST BOARD — swap back to 'GpVORoMM' for production launch
+const HIDDEN_BOARD_ID = '6965633f4fe5254c47e38527';
+const DRIVERS_LIST_ID = '699df279600f35c809d451af';
+
+const CUSTOM_FIELDS = {
+  INV_TOTAL: '696ec194757d725c25438f82',
+  AQREF:     '69711644a396debf23689c94',
+  RS:        '699deaf8ae2995aa04f30441',
+  OT:        '69839631a61d2fa52d6c0699',
 };
 
-// Delivery instruction definitions — order matters (matches spec)
-const FLAGS = [
-  { id: 'firstStop',   icon: '🥇', label: 'First Stop',         tag: '1st',   group: 'stopOrder', sub: 'Scheduling preference' },
-  { id: 'lastStop',    icon: '🏁', label: 'Last Stop',          tag: 'Last',  group: 'stopOrder', sub: 'Scheduling preference' },
-  { id: 'dropOff',     icon: '📦', label: 'Drop-Off',           tag: 'Drop',  group: 'delivery',  sub: 'Leave at door/dock' },
-  { id: 'whiteGlove',  icon: '🧤', label: 'White Glove',        tag: 'Glove', group: 'delivery',  sub: 'Inside placement' },
-  { id: 'equipRemoval',icon: '♻️', label: 'Equipment Removal',  tag: 'Haul',  group: null,        sub: 'Describe items to remove', hasTextField: true },
-];
+const FRUITLAND = { lat: 33.9989, lng: -118.2054, name: 'CF Fruitland' };
+const HQ = { lat: 34.043654, lng: -118.307807, name: "CF Venice" };
 
-// ════════════════════════════════════════════════════════
-// State
-// ════════════════════════════════════════════════════════
-let t = null;
-let token = null;
-let hasRS = false;       // RS custom field filled?
-let viewMode = 'form';   // 'form' | 'summary'
-let formData = {
-  firstStop: false,
-  lastStop: false,
-  dropOff: false,
-  whiteGlove: false,
-  equipRemoval: false,
-  equipRemovalDetail: '',
-  specialRequest: '',
-  customerPhone: '',
-  savedAt: null,
+const LANDMARK_INFO = {
+  'CF Venice': `<div class="lm-t">Charlie's Fixtures</div><div class="lm-r">2251 Venice Blvd., Los Angeles CA 90006</div><div class="lm-r">📞 323-731-9023</div><div class="lm-h">🕐 Mon–Fri 8am–5pm · Sat 8am–4pm</div>`,
+  'CF Fruitland': `<div class="lm-t">Fruitland Warehouse</div><div class="lm-r">3063 E. Fruitland Ave., Vernon CA 90059</div><div class="lm-r">📞 323-584-6122</div><div class="lm-h">🕐 Mon–Fri 8am–1pm &amp; 1:30pm–4:30pm</div>`
 };
 
+const DAY_COLORS = {
+  MON: '#f0c93a', TUE: '#4f8eff', WED: '#7ed6a0',
+  THU: '#e07a5f', FRI: '#c084fc'
+};
+
+const DAY_COLORS_W2 = {
+  MON: '#c08a20', TUE: '#2d5abf', WED: '#2a9d6e',
+  THU: '#b84430', FRI: '#8b3fd4'
+};
+
+function getDayColor(day, key) {
+  return (key && key.includes('W2')) ? (DAY_COLORS_W2[day] || DAY_COLORS[day]) : (DAY_COLORS[day] || '#f0c93a');
+}
+
+const DAYS = ['MON','TUE','WED','THU','FRI'];
+const MAX_STOPS = 4;
+const OVERFLOW_RADIUS_MILES = 2;
+const AWAY_WARNING_DAYS = 10;
+
 // ════════════════════════════════════════════════════════
-// Trello API (same pattern as Attendance)
+// SHARED HELPERS (Session 19 — standardized across all drag/drop paths)
 // ════════════════════════════════════════════════════════
-async function api(path, method = 'GET', body = null) {
-  const sep = path.includes('?') ? '&' : '?';
-  const url = `https://api.trello.com/1${path}${sep}key=${CFG.API_KEY}&token=${token}`;
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`Trello ${res.status}: ${await res.text()}`);
-  return res.json();
+
+// Convert a stop object back to a queue card — canonical field list
+// Used by: removeStop, handleQueueDrop, toggleTruckLock (lock-bounce)
+function stopToQueueCard(stop) {
+  return {
+    id: stop.cardId || stop.id,
+    shortLink: stop.shortLink,
+    name: stop.cardName || stop.name,
+    address: stop.address,
+    coords: stop.coords,
+    quadrant: stop.quadrant,
+    invTotal: stop.invTotal,
+    customerName: stop.customerName,
+    customerPhone: stop.customerPhone,
+    requesterName: stop.requesterName,
+    requesterAvatar: stop.requesterAvatar,
+    rsValue: stop.rsValue,
+    firstStopRequested: stop.firstStopRequested,
+    whiteGlove: stop.whiteGlove,
+    equipRemoval: stop.equipRemoval,
+    stairs: stop.stairs,
+    dropoff: stop.dropoff,
+    deliveryNotes: stop.deliveryNotes,
+    rider: stop.rider,
+  };
+}
+
+// Check if a route can accept another stop (overflow = nearby allowed)
+// Returns { allowed: bool, overflow: bool }
+function checkOverflowAllowed(stops, cardCoords) {
+  if (!stops || stops.length < MAX_STOPS) return { allowed: true, overflow: false };
+  if (!cardCoords) return { allowed: false, overflow: true };
+  const minDist = stops.reduce((min, s) =>
+    s.coords ? Math.min(min, distanceMiles(cardCoords, s.coords)) : min, Infinity);
+  if (minDist > OVERFLOW_RADIUS_MILES) return { allowed: false, overflow: true };
+  return { allowed: true, overflow: true };
+}
+
+// Single lock check — kills dead state[`lock-...`] pattern
+function isRouteLocked(dayKey, truck) {
+  const truckKey = `${dayKey}-${truck}`;
+  return !!state.lockedTrucks?.[truckKey];
 }
 
 // ════════════════════════════════════════════════════════
-// Check RS custom field
+// STATE
 // ════════════════════════════════════════════════════════
-async function checkRS() {
+let state = {
+  drivers: [],           // [{id, name, photo, truckDefault, unavailableFrom, unavailableUntil}]
+  queueCards: [],        // unscheduled cards from "RFS" list
+  schedule: {},          // { 'MON-W1': { A: [...stops], B: [...stops], C: [...stops] } }
+  selectedCard: null,
+  activeDayFilter: 'ALL',
+  activeWeek: 1,
+  activeRightDay: 'MON-W1',
+  pendingSuggestion: null,
+  expandedCard: null,
+  lockedTrucks: {},      // { 'MON-W1-A': true }
+  showTruckB: false,     // hidden by default — Truck A only at start
+  showTruckC: false,     // hidden by default
+  mapMarkers: {},
+  mapRouteLines: {},
+  unscheduledMarkers: [],
+  truckDrivers: {},      // { 'MON-W1-A': driverId, 'MON-W1-B': driverId } — manager-assigned per day
+};
+
+// ════════════════════════════════════════════════════════
+// TRELLO API
+// ════════════════════════════════════════════════════════
+async function trello(path, method = 'GET', body = null) {
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `https://api.trello.com/1${path}${sep}key=${API_KEY}&token=${TOKEN}`;
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
   try {
-    const card = await t.card('customFieldItems');
-    const cfItems = card.customFieldItems || [];
-    const rsField = cfItems.find(cf => cf.idCustomField === CFG.RS_FIELD_ID);
-    // RS is filled if it exists and has a non-empty value
-    return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
-  } catch (e) {
-    console.warn('Could not check RS field:', e);
-    // Graceful fail: if we can't check, show the form anyway
-    // Better to let the salesperson fill it than block them
-    return true;
+    const r = await fetch(url, opts);
+    if (r.status === 401) throw new Error('AUTH');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) {
+    if (e.message === 'AUTH') {
+      setSyncStatus('error', 'Auth failed — check token in Settings');
+      openSettings();
+    }
+    throw e;
   }
 }
 
 // ════════════════════════════════════════════════════════
-// Mutual exclusivity enforcement
+// GEOCODING (free Nominatim)
 // ════════════════════════════════════════════════════════
-function enforceExclusivity(flagId) {
-  const flag = FLAGS.find(f => f.id === flagId);
-  if (!flag || !flag.group) return;
+const geocodeCache = {};
 
-  if (formData[flagId]) {
-    FLAGS.forEach(f => {
-      if (f.group === flag.group && f.id !== flagId) {
-        formData[f.id] = false;
+async function geocode(address) {
+  if (geocodeCache[address]) return geocodeCache[address];
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`, {
+      headers: { 'User-Agent': 'CFDispatch/1.0' }
+    });
+    const data = await r.json();
+    if (data.length > 0) {
+      const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      geocodeCache[address] = result;
+      return result;
+    }
+    return null;
+  } catch { return null; }
+}
+
+// ════════════════════════════════════════════════════════
+// DISTANCE UTILITIES
+// ════════════════════════════════════════════════════════
+function distanceMiles(a, b) {
+  const R = 3958.8;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat/2) ** 2 +
+    Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) * Math.sin(dLng/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+function bearingDeg(from, to) {
+  const dLng = (to.lng - from.lng) * Math.PI / 180;
+  const lat1 = from.lat * Math.PI / 180;
+  const lat2 = to.lat * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function bearingDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+// Total loop distance: Fruitland → stops in order → HQ
+function loopDistance(stops) {
+  if (!stops.length) return 0;
+  let d = distanceMiles(FRUITLAND, stops[0].coords);
+  for (let i = 1; i < stops.length; i++) d += distanceMiles(stops[i-1].coords, stops[i].coords);
+  d += distanceMiles(stops[stops.length-1].coords, HQ);
+  return d;
+}
+
+// Best insertion position for new stop in existing sequence
+function bestInsertPosition(existing, newCoords) {
+  if (!existing.length) return 0;
+  let bestPos = 0, bestDist = Infinity;
+  for (let i = 0; i <= existing.length; i++) {
+    const test = [...existing.slice(0, i), { coords: newCoords }, ...existing.slice(i)];
+    const d = loopDistance(test);
+    if (d < bestDist) { bestDist = d; bestPos = i; }
+  }
+  return bestPos;
+}
+
+// ════════════════════════════════════════════════════════
+// DATE UTILITIES
+// ════════════════════════════════════════════════════════
+function getWeekDates(weekOffset = 0) {
+  // Rolling 10-day window: always returns next 10 working days from today
+  // weekOffset 0 = days 1-5, weekOffset 1 = days 6-10
+  const allDays = getNext10WorkingDays();
+  const start = weekOffset * 5;
+  return allDays.slice(start, start + 5);
+}
+
+function getNext10WorkingDays() {
+  const days = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cursor = new Date(today);
+  let weekNum = 1;
+  let count = 0;
+
+  while (days.length < 10) {
+    const dow = cursor.getDay();
+    if (dow !== 0 && dow !== 6) { // Skip weekends
+      count++;
+      if (count > 5) weekNum = 2;
+      const dayName = DAYS[dow - 1]; // DAYS = ['MON','TUE','WED','THU','FRI']
+      days.push({
+        day: dayName,
+        date: new Date(cursor),
+        key: `${dayName}-W${weekNum}`
+      });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function workingDaysBetween(a, b) {
+  let count = 0;
+  const d = new Date(a);
+  while (d < b) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function dayName(date) {
+  return ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()];
+}
+
+function dueTimestamp(date) {
+  // 5:00 PM Pacific — detect DST
+  const testDate = new Date(date);
+  const offset = testDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).includes('PDT') ? 7 : 8;
+  const utcHour = 17 + offset;
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), utcHour - 24 > 0 ? utcHour - 24 : utcHour, 0, 0)).toISOString();
+}
+
+// ════════════════════════════════════════════════════════
+// PARSE RS FIELD
+// ════════════════════════════════════════════════════════
+const ASAP_KEYWORDS = ['asap','urgent','rush','emergency','stat','critical','now','today','immediately','immed','rn'];
+const FLEXIBLE_KEYWORDS = ['flex','flexible','any','anytime','no preference','no pref','none','tbd','open','whenever','no rush','nr','na','n/a','idc','dont care',"don't care",'whatever','w/e','later','no date','no hurry','nh','np','whenever works','when available','next available','next avail','schedule me','fit me in','no specific'];
+
+function parseRS(val) {
+  if (!val || !val.trim()) return { type: 'empty' };
+  const v = val.trim().toLowerCase();
+  if (ASAP_KEYWORDS.some(k => v.includes(k))) return { type: 'asap' };
+  if (FLEXIBLE_KEYWORDS.some(k => v.includes(k))) return { type: 'flexible' };
+
+  // Try to parse as date
+  const cleaned = val.replace(/[-–]/g, '/').replace(/\b([a-z]+)\s+(\d+)/i, '$1 $2');
+  const parsed = new Date(cleaned + (cleaned.match(/\d{4}/) ? '' : `/${new Date().getFullYear()}`));
+  if (!isNaN(parsed.getTime())) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (parsed < today) return { type: 'past', date: parsed };
+    return { type: 'date', date: parsed };
+  }
+  return { type: 'unknown', raw: val };
+}
+
+// ════════════════════════════════════════════════════════
+// DRIVER STATUS
+// ════════════════════════════════════════════════════════
+function getDriverStatus(driver) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const from = driver.unavailableFrom ? new Date(driver.unavailableFrom) : null;
+  const until = driver.unavailableUntil ? new Date(driver.unavailableUntil) : null;
+
+  if (!from && !until) return { available: true, label: null };
+
+  if (from && until) {
+    if (today >= from && today <= until) {
+      const days = workingDaysBetween(today, until);
+      return { available: false, label: `returns in ${days} day${days !== 1 ? 's' : ''} (${dayName(until)})` };
+    }
+    if (today < from) {
+      const days = workingDaysBetween(today, from);
+      if (days <= AWAY_WARNING_DAYS) {
+        return { available: true, label: `away in ${days} day${days !== 1 ? 's' : ''} (${dayName(from)})` };
+      }
+    }
+  }
+  return { available: true, label: null };
+}
+
+// ════════════════════════════════════════════════════════
+// RECOMMENDATION ENGINE
+// ════════════════════════════════════════════════════════
+function recommend(card) {
+  const results = recommendMultiple(card, 1);
+  return results.length > 0 ? results[0] : null;
+}
+
+function recommendMultiple(card, limit = 5) {
+  if (!card.coords) return [];
+
+  const week1 = getWeekDates(0);
+  const week2 = getWeekDates(1);
+  const allDays = [...week1, ...week2];
+
+  const rsInfo = parseRS(card.rsValue);
+  let preferredDate = null;
+  if (rsInfo.type === 'date') preferredDate = rsInfo.date;
+
+  const options = [];
+
+  for (const { day, date, key } of allDays) {
+    const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+    if (date <= todayDate) continue; // Skip today and past — earliest recommendation is tomorrow
+
+    const isPreferredDay = preferredDate && (() => {
+      const pDate = new Date(preferredDate); pDate.setHours(0,0,0,0);
+      const dDate = new Date(date); dDate.setHours(0,0,0,0);
+      return pDate.getTime() === dDate.getTime();
+    })();
+
+    const trucksToShow = ['A', 'B', ...( (state.showTruckC || Object.keys(state.schedule[key]?.C || {}).length > 0 || (state.schedule[key]?.C || []).length > 0) ? ['C'] : [] )];
+    for (const truck of trucksToShow) {
+      const truckKey = `${key}-${truck}`;
+      if (state.lockedTrucks[truckKey]) continue;
+
+      const stops = state.schedule[key]?.[truck] || [];
+      if (stops.length >= MAX_STOPS) {
+        const minDist = stops.reduce((min, s) => Math.min(min, distanceMiles(card.coords, s.coords)), Infinity);
+        if (minDist > OVERFLOW_RADIUS_MILES) continue;
+      }
+
+      // Direction check
+      const dayStops = [
+        ...(state.schedule[key]?.A || []),
+        ...(state.schedule[key]?.B || []),
+        ...(state.schedule[key]?.C || [])
+      ];
+
+      let directionPenalty = 0;
+      if (dayStops.length > 0) {
+        const centroidLat = dayStops.reduce((s, x) => s + x.coords.lat, 0) / dayStops.length;
+        const centroidLng = dayStops.reduce((s, x) => s + x.coords.lng, 0) / dayStops.length;
+        const routeBearing = bearingDeg(FRUITLAND, { lat: centroidLat, lng: centroidLng });
+        const cardBearing = bearingDeg(FRUITLAND, card.coords);
+        const diff = bearingDiff(routeBearing, cardBearing);
+        if (diff > 45) directionPenalty = diff;
+      }
+
+      const minDist = stops.length > 0
+        ? stops.reduce((min, s) => Math.min(min, distanceMiles(card.coords, s.coords)), Infinity)
+        : distanceMiles(card.coords, FRUITLAND);
+
+      // Score: lower is better
+      let score = minDist + (directionPenalty * 0.1);
+
+      // colorScore: operational likelihood only (no RS preference bias)
+      // Used for green/gold/red display — reflects slot quality, not date preference
+      let colorScore = minDist + (directionPenalty * 0.1);
+
+      // Preferred date bonus: massive score reduction if this is the requested day
+      if (isPreferredDay) {
+        score -= 1000; // Strongly prefer the requested date
+      } else if (preferredDate) {
+        // If they have a preferred date but this isn't it, penalize heavily
+        score += 500;
+      } else {
+        // No preferred date — favor earlier days slightly
+        score += (date - new Date()) / 86400000 * 0.5;
+      }
+
+      // Capacity bonus: emptier routes score better (higher chance of approval)
+      const capacityBonus = (MAX_STOPS - stops.length) * 2;
+      score -= capacityBonus;
+      colorScore -= capacityBonus;
+
+      // Empty route = guaranteed green — no roadblocks
+      if (stops.length === 0) colorScore = -10;
+
+      // Rider bonus: if card is flagged as rider and truck has stops, 
+      // give a big bonus when the card is close to an existing stop (in-route match)
+      let isInRouteMatch = false;
+      if (card.rider && stops.length > 0 && minDist < 5) {
+        score -= 200; // Strong bonus for nearby route match
+        isInRouteMatch = true;
+      }
+
+      const insertPos = bestInsertPosition(stops, card.coords);
+
+      options.push({
+        dayKey: key, day, date, truck, insertPos, minDist,
+        overflow: stops.length >= MAX_STOPS,
+        isPreferredDay: !!isPreferredDay,
+        isInRouteMatch,
+        stopsOnTruck: stops.length,
+        score,
+        colorScore
+      });
+    }
+  }
+
+  // Sort by score (lower = better)
+  options.sort((a, b) => a.score - b.score);
+
+  // If no options and routes are full, add overflow fallback
+  if (options.length === 0) {
+    const futureDays = allDays.filter(d => d.date >= new Date(new Date().setHours(0,0,0,0)));
+    const lastDay = futureDays[futureDays.length - 1];
+    if (lastDay) {
+      const nextDate = new Date(lastDay.date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      while (nextDate.getDay() === 0 || nextDate.getDay() === 6) {
+        nextDate.setDate(nextDate.getDate() + 1);
+      }
+      const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      options.push({
+        dayKey: null, day: dayNames[nextDate.getDay()], date: nextDate,
+        truck: 'A', insertPos: 0, minDist: distanceMiles(card.coords, FRUITLAND),
+        overflow: false, routesFull: true, nextAvailableDate: nextDate,
+        isPreferredDay: false, stopsOnTruck: 0, score: 9999
+      });
+    }
+  }
+
+  // Deduplicate by date — show best option per unique day
+  const seenDays = new Set();
+  const uniqueDateOptions = [];
+  for (const opt of options) {
+    const dateKey = opt.date.toDateString();
+    if (!seenDays.has(dateKey)) {
+      seenDays.add(dateKey);
+      uniqueDateOptions.push(opt);
+    }
+    if (uniqueDateOptions.length >= limit) break;
+  }
+
+  return uniqueDateOptions;
+}
+
+// ════════════════════════════════════════════════════════
+// MAP SETUP
+// ════════════════════════════════════════════════════════
+let map;
+
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([34.02, -118.35], 11);
+
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?api_key=STADIA_API_KEY_PLACEHOLDER', {
+    maxZoom: 18,
+    attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap'
+  }).addTo(map);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  // Permanent landmarks
+  addLandmarkPin(FRUITLAND, '#f0c93a');
+  addLandmarkPin(HQ, '#4f8eff');
+}
+
+function addLandmarkPin(loc, color) {
+  // Convert hex to rgba for ring and glow
+  const hex = color.replace('#','');
+  const r = parseInt(hex.substring(0,2),16);
+  const g = parseInt(hex.substring(2,4),16);
+  const b = parseInt(hex.substring(4,6),16);
+  const ringColor = `rgba(${r},${g},${b},0.5)`;
+  const glowColor = `rgba(${r},${g},${b},0.15)`;
+  const icon = L.divIcon({
+    className: '',
+    html: `<div class="landmark-pin"><div class="landmark-icon" style="background:rgba(235,230,220,0.7);backdrop-filter:blur(12px) saturate(1.5) brightness(1.1);-webkit-backdrop-filter:blur(12px) saturate(1.5) brightness(1.1);border:2px solid ${ringColor};padding:4px;border-radius:10px;box-shadow:0 0 0 4px ${glowColor}, 0 2px 12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5);"><img src="assets/cf-pin.png" width="28" height="28" style="display:block;border-radius:4px;" /></div></div>`,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21],
+  });
+  L.marker([loc.lat, loc.lng], { icon, zIndexOffset: -100 })
+    .bindTooltip(LANDMARK_INFO[loc.name] || loc.name, { permanent: false, direction: 'right', offset: [18, 0], className: 'landmark-tip', interactive: false })
+    .addTo(map);
+}
+
+function createUnscheduledPin(urgency) {
+  const cls = urgency === 'asap' ? 'unscheduled-pin asap' : 'unscheduled-pin';
+  return L.divIcon({ className: '', html: `<div class="${cls}"></div>`, iconSize: [10,10], iconAnchor: [5,5] });
+}
+
+// ════════════════════════════════════════════════════════
+// RENDER MAP STOPS
+// ════════════════════════════════════════════════════════
+// ── ROUTE PREVIEW ON ALGO STRIP HOVER ──
+let previewLayer = null;
+let previewMarker = null;
+
+function showRoutePreview(cardId, dayKey, truck, insertPos) {
+  clearRoutePreview();
+
+  const card = state.queueCards.find(c => c.id === cardId);
+  if (!card?.coords) return;
+
+  // Get existing stops for this truck on this day
+  const existingStops = (state.schedule[dayKey]?.[truck] || []).filter(s => s.coords);
+  
+  // Build the route with this card inserted at the recommended position
+  const stopCoords = existingStops.map(s => s.coords);
+  stopCoords.splice(insertPos, 0, card.coords);
+
+  // Full route: Warehouse → stops → HQ
+  const routePoints = [FRUITLAND, ...stopCoords, HQ].map(p => [p.lat, p.lng]);
+
+  // Draw preview polyline — golden dashed, semi-transparent
+  previewLayer = L.polyline(routePoints, {
+    color: '#F0C93A',
+    weight: 4,
+    opacity: 0.7,
+    dashArray: '10 6',
+    smoothFactor: 2,
+  }).addTo(map);
+
+  // Pulsing marker at the card's position
+  const pulseHtml = `
+    <div style="position:relative;width:32px;height:32px">
+      <div style="position:absolute;inset:0;background:rgba(240,201,58,0.3);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite"></div>
+      <div style="position:absolute;top:4px;left:4px;width:24px;height:24px;background:#F0C93A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#000;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${insertPos + 1}</div>
+    </div>`;
+  
+  previewMarker = L.marker([card.coords.lat, card.coords.lng], {
+    icon: L.divIcon({ className: '', html: pulseHtml, iconSize: [32, 32], iconAnchor: [16, 16] }),
+    zIndexOffset: 1000
+  }).addTo(map);
+
+  // Add CSS animation if not already present
+  if (!document.getElementById('pulse-style')) {
+    const style = document.createElement('style');
+    style.id = 'pulse-style';
+    style.textContent = `@keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }`;
+    document.head.appendChild(style);
+  }
+}
+
+function clearRoutePreview() {
+  if (previewLayer) { previewLayer.remove(); previewLayer = null; }
+  if (previewMarker) { previewMarker.remove(); previewMarker = null; }
+}
+
+function renderMap() {
+  // Clear preview if active
+  clearRoutePreview();
+  // Clear existing
+  Object.values(state.mapMarkers).flat().forEach(m => m.remove());
+  Object.values(state.mapRouteLines).flat().forEach(l => l.remove());
+  state.unscheduledMarkers.forEach(m => m.remove());
+  state.mapMarkers = {};
+  state.mapRouteLines = {};
+  state.unscheduledMarkers = [];
+
+  const allDays = [...getWeekDates(0), ...getWeekDates(1)];
+  const activeFilter = state.activeDayFilter;
+
+  for (const { day, key } of allDays) {
+    if (activeFilter !== 'ALL' && key !== activeFilter) continue;
+
+    const weekNum = key.includes('W1') ? 1 : 2;
+    const dayColor = getDayColor(day, key);
+    const daySchedule = state.schedule[key] || {};
+
+    for (const [truck, stops] of Object.entries(daySchedule)) {
+      if (!stops.length) continue;
+
+      const driver = getDriverForTruck(key, truck);
+      const driverOrFallback = driver || state.drivers[0]; // fallback for route planning, not for pins
+      const routePoints = [FRUITLAND, ...stops.map(s => s.coords), HQ];
+
+      // Route line — Truck B gets lighter opacity to differentiate
+      const truckOpacity = 0.75;
+      const truckWeight = truck === 'A' ? 1 : 1.5;
+      const truckDash = truck === 'A' ? '10 6' : '2 6';
+      const line = L.polyline(
+        routePoints.map(p => [p.lat, p.lng]),
+        {
+          color: dayColor,
+          weight: truckWeight,
+          opacity: truckOpacity,
+          dashArray: truckDash,
+          smoothFactor: 2,
+          className: `route-line route-${key}-${truck}`,
+        }
+      ).addTo(map);
+      line._routeKey = key;
+      line._routeTruck = truck;
+
+      if (!state.mapRouteLines[key]) state.mapRouteLines[key] = [];
+      state.mapRouteLines[key].push(line);
+
+      // Stop pins — circle for Truck A, rounded square for Truck B
+      stops.forEach((stop, i) => {
+        if (!stop.coords) return;
+        const radius = truck === 'A' ? '50%' : '6px';
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:${dayColor};width:24px;height:24px;border-radius:${radius};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.15)">${i+1}</div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        const dayNames = { MON: 'Mon', TUE: 'Tue', WED: 'Wed', THU: 'Thu', FRI: 'Fri' };
+        const dates = [...getWeekDates(0), ...getWeekDates(1)];
+        const dayInfo = dates.find(d => d.key === key);
+        const dateLabel = dayInfo ? dayInfo.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : key;
+        const stopOwner = stop.requesterName || stop.salesperson || null;
+        const statusLabel = stop.committed ? 'Scheduled' : 'Pending';
+        const statusClass = stop.committed ? 'dt-scheduled' : 'dt-pending';
+        const stopOwnerLine = stopOwner ? `<div class="dt-owner">\u{1F464} ${stopOwner}</div>` : "";
+        const stopTipHtml = `<div class="dt-name">${stop.name}</div>${stopOwnerLine}<div class="dt-status"><span class="${statusClass}">\u25CF ${statusLabel} \u00B7 ${dateLabel}</span></div>`;
+
+        const marker = L.marker([stop.coords.lat, stop.coords.lng], { icon })
+          .bindTooltip(stopTipHtml, { permanent: false, direction: 'right', offset: [12, 0], className: 'dot-tip', interactive: false })
+          .addTo(map);
+
+        if (!state.mapMarkers[key]) state.mapMarkers[key] = [];
+        state.mapMarkers[key].push(marker);
+      });
+    }
+  }
+
+  // Unscheduled dots — always visible so manager can see pending cards alongside any day's routes
+  state.queueCards.forEach((card, idx) => {
+      if (!card.coords) return;
+      const owner = card.requesterName || card.salesperson || null;
+      const ownerLine = owner ? `<div class="dt-owner">\u{1F464} ${owner}</div>` : '';
+      const tipHtml = `<div class="dt-name">${card.name}</div>${ownerLine}<div class="dt-status"><span class="dt-pending">\u25CF Pending</span></div>`;
+      const urgency = parseRS(card.rsValue).type === 'asap' ? 'asap' : 'normal';
+      const marker = L.marker([card.coords.lat, card.coords.lng], { icon: createUnscheduledPin(urgency) })
+        .bindTooltip(tipHtml, { permanent: false, direction: 'right', offset: [12, 0], className: 'dot-tip', interactive: false })
+        .addTo(map);
+      marker._cardId = card.id;
+      state.unscheduledMarkers.push(marker);
+    });
+  updateRouteAnimation();
+}
+
+// ── ROUTE ANIMATION CONTROL ──
+// Determines which route lines animate based on current view state:
+// ALL + no selection → all animate
+// ALL + card selected → only that card's route animates, others dim
+// Day + no selection → all routes for that day animate
+// Day + card selected → only that card's route animates, others dim
+function updateRouteAnimation() {
+  const activeFilter = state.activeDayFilter;
+  const selectedCard = state.selectedCard;
+
+  // Find which route the selected card is on (if scheduled)
+  let selectedRouteKey = null;
+  let selectedRouteTruck = null;
+  if (selectedCard) {
+    for (const [key, daySchedule] of Object.entries(state.schedule)) {
+      for (const [truck, stops] of Object.entries(daySchedule)) {
+        if (stops.some(s => s.cardId === selectedCard.id || s.id === selectedCard.id)) {
+          selectedRouteKey = key;
+          selectedRouteTruck = truck;
+          break;
+        }
+      }
+      if (selectedRouteKey) break;
+    }
+  }
+
+  // Apply animation classes to all route lines
+  for (const [key, lines] of Object.entries(state.mapRouteLines)) {
+    lines.forEach(line => {
+      const el = line.getElement?.();
+      if (!el) return;
+
+      // Reset classes
+      el.classList.remove('route-animate-a', 'route-animate-b', 'route-dim');
+
+      const animClass = line._routeTruck === 'A' ? 'route-animate-a' : 'route-animate-b';
+
+      if (selectedCard && selectedRouteKey) {
+        // Card is selected AND it's on a route
+        if (line._routeKey === selectedRouteKey && line._routeTruck === selectedRouteTruck) {
+          el.classList.add(animClass);
+        } else {
+          el.classList.add('route-dim');
+        }
+      } else {
+        // No card selected (or card is still pending) — animate all visible routes
+        el.classList.add(animClass);
       }
     });
   }
 }
 
-// ════════════════════════════════════════════════════════
-// Toggle checkbox
-// ════════════════════════════════════════════════════════
-function toggleCheck(flagId) {
-  formData[flagId] = !formData[flagId];
-  enforceExclusivity(flagId);
-  render();
-  // NOTE: No t.sizeTo() here — same lesson as Attendance
+function buildPopupHTML(stop) {
+  // Find which driver is assigned to this stop
+  const dayKey = stop.dayKey || state.activeRightDay;
+  const truck = stop.truck || '';
+  const driver = getDriverForTruck(dayKey, truck)
+    || state.drivers?.find(d => d.id === stop.driverId);
+  const driverFirstName = driver?.name?.split(' ')[0]?.toLowerCase() || '';
+
+  const tags = [
+    stop.firstStopApproved && `<span class="popup-tag first">First Stop</span>`,
+    stop.rs === 'ASAP' && `<span class="popup-tag asap">ASAP</span>`,
+    stop.rs === 'FLEXIBLE' && `<span class="popup-tag flexible">Flexible</span>`,
+    stop.weightGate && `<span class="popup-tag service">Weight Gate</span>`,
+    stop.equipRemoval && `<span class="popup-tag remove">Equip Removal</span>`,
+  ].filter(Boolean).join('');
+
+  return `<div>
+    ${driver ? `
+    <div class="popup-driver-row">
+      <img class="popup-driver-img" src="assets/${driverFirstName}.png" onerror="this.style.display='none'" alt="${driver.name}" />
+      <div class="popup-driver-info">
+        <div class="popup-driver-name">${driver.name}</div>
+        <div class="popup-driver-phone">${driver.phone || 'No phone on file'}</div>
+      </div>
+    </div>` : ''}
+    <div class="popup-title">${stop.cardName || stop.name}</div>
+    ${stop.address ? `<div class="popup-row"><span class="popup-icon">📍</span><strong>${stop.address}</strong></div>` : ''}
+    <div class="popup-divider"></div>
+    ${stop.customerName ? `<div class="popup-row"><span class="popup-icon">👤</span> ${stop.customerName}</div>` : ''}
+    ${stop.customerPhone ? `<div class="popup-row"><span class="popup-icon">📞</span> <strong>${stop.customerPhone}</strong></div>` : '<div class="popup-row" style="opacity:0.3">📞 No contact on file</div>'}
+    ${stop.salesperson ? `<div class="popup-row"><span class="popup-icon">🧑‍💼</span> ${stop.salesperson}</div>` : ''}
+    ${stop.invTotal ? `<div class="popup-row"><span class="popup-icon">💰</span> $${parseFloat(stop.invTotal).toLocaleString()}</div>` : ''}
+    ${tags ? `<div style="margin-top:8px;">${tags}</div>` : ''}
+    ${stop.notes ? `<div class="popup-divider"></div><div class="popup-row" style="font-style:italic;opacity:0.7">💬 ${stop.notes}</div>` : ''}
+    <a class="popup-link" href="https://trello.com/c/${stop.cardShortId || stop.shortLink}" target="_blank">Open in Trello →</a>
+  </div>`;
+}
+
+function buildQueuePopupHTML(card) {
+  const tags = [
+    card.rs && `<span class="popup-tag ${card.rs === 'ASAP' ? 'asap' : card.rs === 'FLEXIBLE' ? 'flexible' : 'service'}">${card.rs}</span>`,
+    card.firstStop && `<span class="popup-tag first">First Stop</span>`,
+    card.weightGate && `<span class="popup-tag service">Weight Gate</span>`,
+    card.equipRemoval && `<span class="popup-tag remove">Equip Removal</span>`,
+    card.stairs && `<span class="popup-tag service">Stairs</span>`,
+  ].filter(Boolean).join('');
+
+  return `<div>
+    <div class="popup-title">${card.name}</div>
+    ${card.address ? `<div class="popup-row"><span class="popup-icon">📍</span> <strong>${card.address}</strong></div>` : ''}
+    <div class="popup-divider"></div>
+    ${card.customerName ? `<div class="popup-row"><span class="popup-icon">👤</span> ${card.customerName}</div>` : ''}
+    ${card.customerPhone ? `<div class="popup-row"><span class="popup-icon">📞</span> <strong>${card.customerPhone}</strong></div>` : '<div class="popup-row" style="opacity:0.3">📞 No contact on file</div>'}
+    ${card.salesperson ? `<div class="popup-row"><span class="popup-icon">🧑‍💼</span> ${card.salesperson}</div>` : ''}
+    ${card.invTotal ? `<div class="popup-row"><span class="popup-icon">💰</span> $${parseFloat(card.invTotal).toLocaleString()}</div>` : ''}
+    ${tags ? `<div style="margin-top:8px;">${tags}</div>` : ''}
+    ${card.notes ? `<div class="popup-divider"></div><div class="popup-row" style="font-style:italic;opacity:0.7">💬 ${card.notes}</div>` : ''}
+    <a class="popup-link" href="https://trello.com/c/${card.shortLink}" target="_blank">Open in Trello →</a>
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════
-// Read form state from DOM (Attendance lesson: DOM = truth)
+// RENDER LEFT PANEL
 // ════════════════════════════════════════════════════════
-function readFormFromDOM() {
-  const data = {
-    firstStop: false, lastStop: false,
-    dropOff: false, whiteGlove: false,
-    equipRemoval: false, equipRemovalDetail: '',
-    specialRequest: '', customerPhone: '',
-  };
+function renderQueue() {
+  const list = document.getElementById('cards-list');
+  const badge = document.getElementById('queue-badge');
+  const search = document.getElementById('queue-search').value.toLowerCase();
 
-  FLAGS.forEach(f => {
-    const row = document.getElementById(`check-${f.id}`);
-    if (row) data[f.id] = row.classList.contains('active');
+  // Sort queue: RS date ascending (earliest requested first), then card creation date (oldest first)
+  state.queueCards.sort((a, b) => {
+    const rsA = parseRS(a.rsValue);
+    const rsB = parseRS(b.rsValue);
+    
+    // Cards with specific dates go first, sorted by date ascending
+    const dateA = rsA.type === 'date' ? rsA.date.getTime() : Infinity;
+    const dateB = rsB.type === 'date' ? rsB.date.getTime() : Infinity;
+    if (dateA !== dateB) return dateA - dateB;
+    
+    // Then by Trello card creation (embedded in card ID — first 8 hex chars)
+    const createdA = parseInt(a.id?.substring(0, 8), 16) || 0;
+    const createdB = parseInt(b.id?.substring(0, 8), 16) || 0;
+    return createdA - createdB;
   });
 
-  const eqDetail = document.getElementById('equipRemovalDetail');
-  if (eqDetail) data.equipRemovalDetail = eqDetail.value.trim();
+  const filtered = state.queueCards.filter(c =>
+    c.name.toLowerCase().includes(search) ||
+    (c.address || '').toLowerCase().includes(search)
+  );
 
-  const special = document.getElementById('specialRequest');
-  if (special) data.specialRequest = special.value.trim();
+  badge.textContent = state.queueCards.length;
+  badge.className = 'badge' + (state.queueCards.length > 0 ? ' has-items' : '');
 
-  const phone = document.getElementById('customerPhone');
-  if (phone) data.customerPhone = phone.value.trim();
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="icon">📭</div>
+      <div class="title">${search ? 'No matches' : 'No pending requests'}</div>
+      <div class="sub">${search ? 'Try a different search' : 'Cards will appear here when salespeople fill the RS field in Trello'}</div>
+    </div>`;
+    return;
+  }
 
-  return data;
+  list.innerHTML = filtered.map(card => buildQueueCard(card)).join('');
+}
+
+function buildQueueCard(card) {
+  const isSelected = state.selectedCard?.id === card.id;
+  const isExpanded = state.expandedCard === card.id;
+  const warningClass = (!card.address || !card.coords) ? 'has-warning' : (!card.requesterName ? 'has-warning' : '');
+
+  // Avatar (card owner / salesperson)
+  let avatarHtml = '';
+  if (card.requesterAvatar) {
+    avatarHtml = `<img class="qc-avatar" src="${card.requesterAvatar}" title="${card.requesterName || 'Card Owner'}" />`;
+  } else if (card.requesterName) {
+    const initials = card.requesterName.split(' ').map(n => n[0]).join('');
+    avatarHtml = `<div class="qc-avatar-initials" title="${card.requesterName}">${initials}</div>`;
+  }
+
+  // Tags — monotone
+  const quadrant = card.quadrant || '';
+  const rsInfo = parseRS(card.rsValue);
+  let rsDisplay = 'Flexible';
+  if (rsInfo.type === 'asap') rsDisplay = 'ASAP';
+  else if (rsInfo.type === 'date') rsDisplay = rsInfo.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  else if (rsInfo.type === 'past') rsDisplay = '⚠ Past date';
+  else if (rsInfo.type === 'flexible') rsDisplay = 'Flexible';
+  else if (card.rsValue && card.rsValue !== '') rsDisplay = card.rsValue;
+
+  // Algo strip — show top 2 recommendations with RS context
+  let algoStrip = '';
+  const warningStyle = 'background:rgba(200,100,50,0.06)';
+  const warningTextStyle = 'color:rgba(180,90,40,0.6);font-weight:500;font-size:11px;font-family:Inter Tight,sans-serif';
+  let warnings = '';
+  if (!card.coords) {
+    warnings += `<div class="algo-strip" style="${warningStyle}">
+      <span class="algo-icon" style="opacity:0.8">⚠</span>
+      <span style="${warningTextStyle}">Address required for routing</span>
+    </div>`;
+  }
+  if (!card.requesterName) {
+    warnings += `<div class="algo-strip" style="${warningStyle}">
+      <span class="algo-icon" style="opacity:0.8">⚠</span>
+      <span style="${warningTextStyle}">Owner required — assign member in Trello</span>
+    </div>`;
+  }
+  if (warnings) {
+    algoStrip = warnings;
+  } else {
+    const recs = recommendMultiple(card, 3);
+    const dayNames = { MON: 'Mon', TUE: 'Tue', WED: 'Wed', THU: 'Thu', FRI: 'Fri' };
+
+    // Score → color: green (<5 = likely), gold (5-20 = possible), red (>20 = unlikely)
+    function algoColor(score) {
+      if (score < 5) return 'rgba(76,155,60,0.85)';   // green — high likelihood
+      if (score <= 20) return 'rgba(190,150,40,0.8)';  // gold — moderate
+      return 'rgba(200,85,60,0.8)';                     // red — low likelihood
+    }
+
+    if (recs.length > 0 && recs[0].routesFull) {
+      const dateStr = recs[0].nextAvailableDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const nextDayColor = getDayColor(recs[0].nextAvailableDate.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase().slice(0,3), '');
+      algoStrip = `<div class="algo-strip" style="background:rgba(180,130,40,0.06)">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${nextDayColor};flex-shrink:0"></span>
+        <span style="color:rgba(160,110,30,0.65);font-weight:600;font-size:11px;font-family:'Inter Tight',sans-serif">Routes full</span>
+        <span style="color:rgba(160,110,30,0.45);font-size:10.5px;font-family:'Inter Tight',sans-serif">· Next opening ${dateStr}</span>
+      </div>`;
+    } else if (recs.length > 0) {
+      // Best recommendation
+      const best = recs[0];
+      const dateStr = best.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const color = algoColor(best.colorScore);
+      const dayColor = getDayColor(best.dayKey.split('-')[0], best.dayKey);
+      const prefLabel = best.isPreferredDay ? '<span style="font-size:9px;font-weight:700;margin-left:4px">★ REQUESTED</span>' : '';
+      const riderMatch = (card.rider && best.isInRouteMatch) ? '<span style="color:rgba(100,80,180,0.8);font-size:9px;font-weight:700;margin-left:4px">🏷 IN-ROUTE</span>' : '';
+
+      algoStrip = `<div class="algo-strip" 
+        onmouseenter="showRoutePreview('${card.id}','${best.dayKey}','${best.truck}',${best.insertPos})"
+        onmouseleave="clearRoutePreview()"
+        style="cursor:pointer;border-left:3px solid ${dayColor}">
+        <span class="algo-icon">✦</span>
+        <span style="color:${color};font-weight:700;font-size:11px;font-family:'Inter Tight',sans-serif">${dateStr}</span>
+        ${prefLabel}${riderMatch}
+      </div>`;
+
+      // Second recommendation (alternative)
+      if (recs.length > 1 && !recs[1].routesFull) {
+        const alt = recs[1];
+        const altDateStr = alt.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const altColor = algoColor(alt.colorScore);
+        const altDayColor = getDayColor(alt.dayKey.split('-')[0], alt.dayKey);
+        const altPref = alt.isPreferredDay ? ' ★' : '';
+        algoStrip += `<div class="algo-strip" style="opacity:0.6;margin-top:3px;padding:4px 9px;cursor:pointer;border-left:3px solid ${altDayColor}"
+          onmouseenter="showRoutePreview('${card.id}','${alt.dayKey}','${alt.truck}',${alt.insertPos})"
+          onmouseleave="clearRoutePreview()">
+          <span class="algo-icon" style="font-size:9px">○</span>
+          <span style="color:${altColor};font-weight:500;font-size:10px;font-family:'Inter Tight',sans-serif">${altDateStr}${altPref}</span>
+        </div>`;
+      }
+    } else {
+      algoStrip = `<div class="algo-strip" style="background:rgba(0,0,0,0.02)">
+        <span class="algo-icon" style="opacity:0.5">✦</span>
+        <span style="color:rgba(0,0,0,0.3);font-weight:500;font-size:11px;font-family:'Inter Tight',sans-serif">Calculating best route…</span>
+      </div>`;
+    }
+  }
+
+  // Expanded content with graceful fallbacks
+  let expandedHtml = '';
+  if (isExpanded) {
+    const nameLine = card.customerName
+      ? `<div class="qc-expanded-row"><span class="exp-icon">👤</span> <strong>${card.customerName}</strong></div>`
+      : `<div class="qc-expanded-row" style="color:rgba(0,0,0,0.25)"><span class="exp-icon">👤</span> <em>No customer name</em></div>`;
+
+    const phoneLine = card.customerPhone
+      ? `<div class="qc-expanded-row"><span class="exp-icon">📞</span> ${card.customerPhone}</div>`
+      : `<div class="qc-expanded-row" style="color:rgba(180,90,40,0.5)"><span class="exp-icon">📞</span> <em>Contact info needed — update in Trello</em></div>`;
+
+    const addressLine = card.address
+      ? `<div class="qc-expanded-row"><span class="exp-icon">📍</span> ${card.address}</div>`
+      : `<div class="qc-expanded-row" style="color:rgba(180,90,40,0.5)"><span class="exp-icon">📍</span> <em>Address required for scheduling</em></div>`;
+
+    const serviceTags = [
+      card.stairs && '🪜 Stairs',
+      card.equipRemoval && '🔧 Removal',
+      card.whiteGlove && '🧤 White Glove',
+      card.firstStopRequested && '🥇 First Stop',
+      card.dropoff && '📦 Drop-Off',
+    ].filter(Boolean);
+
+    expandedHtml = `<div class="qc-expanded-content">
+      ${nameLine}
+      ${phoneLine}
+      ${addressLine}
+      ${card.invTotal ? `<div class="qc-expanded-row"><span class="exp-icon">💰</span> $${parseFloat(card.invTotal).toLocaleString()}</div>` : ''}
+      ${serviceTags.length ? `<div class="qc-expanded-tags">${serviceTags.map(t => `<span class="exp-tag">${t}</span>`).join('')}</div>` : ''}
+      ${card.deliveryNotes ? `<div class="qc-expanded-divider"></div><div class="qc-expanded-row" style="font-style:italic;opacity:0.7"><span class="exp-icon">💬</span> ${card.deliveryNotes}</div>` : ''}
+      <div class="qc-expanded-divider"></div>
+      <div class="qc-expanded-row" style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:10px;color:rgba(0,0,0,0.4)">Free delivery (ride-along)</span>
+        <span class="free-toggle ${card.rider ? 'active' : ''}" onclick="event.stopPropagation();toggleRider('${card.id}')">${card.rider ? '✓ FREE' : 'Mark free'}</span>
+      </div>
+    </div>`;
+  }
+
+  const freeBadge = card.rider ? '<span class="free-badge">FREE</span>' : '';
+
+  return `<div class="queue-card ${warningClass} ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}"
+    draggable="true"
+    onclick="toggleExpandCard('${card.id}')"
+    ondblclick="window.open('https://trello.com/c/${card.shortLink}','_blank')"
+    ondragstart="dragQueueCard(event,'${card.id}')"
+    ondragend="endDragQueueCard(event)">
+    ${avatarHtml}
+    <div class="qc-title" style="display:flex;align-items:center;gap:6px"><span>${card.name}</span>${freeBadge}</div>
+    <div class="qc-flags">
+      ${quadrant ? `<span class="qc-tag">${quadrant}</span>` : ''}
+      <span class="qc-tag">${rsDisplay}</span>
+    </div>
+    ${algoStrip}
+    ${expandedHtml}
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════
-// Save to Trello (t.set = pluginData, readable by CF Dispatch)
+// RENDER RIGHT PANEL
 // ════════════════════════════════════════════════════════
-async function saveForm() {
-  const btn = document.getElementById('saveBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+function renderRightPanel() {
+  renderRouteSheet();
+}
 
-  try {
-    const data = readFormFromDOM();
-    data.savedAt = new Date().toISOString();
+// Day tabs removed — center pills now control right panel via setDayFilter()
 
-    await t.set('card', 'shared', CFG.STORAGE_KEY, data);
-    Object.assign(formData, data);
+function renderRouteSheet() {
+  const panel = document.getElementById('route-panel');
+  const key = state.activeRightDay;
 
-    // Switch to summary view after successful save
-    viewMode = 'summary';
-    render();
+  const dates = [...getWeekDates(0), ...getWeekDates(1)];
+  const dayInfo = dates.find(d => d.key === key);
 
-  } catch (e) {
-    console.error('Save error:', e);
-    if (btn) { btn.textContent = '✗ Error'; btn.disabled = false; }
-    const msg = document.getElementById('statusMsg');
-    if (msg) { msg.textContent = e.message; msg.className = 'status-msg error'; }
+  const dayColor = DAY_COLORS[dayInfo?.day] || 'var(--accent)';
+  const dateLabel = dayInfo ? dayInfo.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : key;
+
+  // Count staged (uncommitted) stops across all routes for this day
+  const stagedCount = Object.values(state.schedule[key] || {}).flat().filter(s => !s.committed).length;
+  const stagedBadgeHtml = `<span class="staged-count-badge${stagedCount > 0 ? ' has-staged' : ''}">${stagedCount} to commit</span>`;
+
+  let html = `<div class="route-day-header">
+    <div class="route-day-info">
+      <div class="route-day-name">${dateLabel}</div>
+    </div>
+    ${stagedBadgeHtml}
+  </div>`;
+
+  const trucksToRender = ['A'];
+  if (state.showTruckB || (state.schedule[key]?.B || []).length > 0) trucksToRender.push('B');
+  if (state.showTruckC || (state.schedule[key]?.C || []).length > 0) trucksToRender.push('C');
+
+  for (const truck of trucksToRender) {
+    const truckKey = `${key}-${truck}`;
+    const stops = state.schedule[key]?.[truck] || [];
+    const isLocked = state.lockedTrucks[truckKey];
+
+    // Get manager-assigned driver for this day+truck
+    const driver = getDriverForTruck(key, truck);
+    const driverName = driver ? driver.name.split(' ')[0] : null;
+    const driverImg = driver ? `assets/${driver.name.split(' ')[0].toLowerCase()}.png` : '';
+    const driverStatus = driver ? getDriverStatus(driver) : null;
+    const isUnavailable = driverStatus && !driverStatus.available;
+
+    const capDots = Array.from({length: MAX_STOPS}, (_, i) =>
+      `<div class="cap-dot ${i < stops.length ? (stops.length > MAX_STOPS ? 'overflow' : 'filled') : ''}"></div>`
+    ).join('');
+
+    // Build glass tooltip HTML from driver info
+    const driverTipRows = driver?.driverInfo
+      ? Object.entries(driver.driverInfo).map(([k, v]) => {
+          const icons = { phone: '📞', mobile: '📱', cell: '📱', license: '🪪', vehicle: '🚛', email: '📧' };
+          const icon = icons[k] || '•';
+          return `<div class="dt-driver-row">${icon} ${v}</div>`;
+        }).join('')
+      : '';
+    const driverTipHTML = driver
+      ? `<div class="driver-tip"><div class="dt-driver-name">${driverName}</div>${driverTipRows}</div>`
+      : '';
+
+    // Avatar HTML — either assigned driver photo or placeholder
+    const avatarHTML = driver
+      ? `<div class="driver-tip-wrap">
+          <div class="truck-driver-avatar-wrap ${isUnavailable ? 'unavailable' : ''}" onclick="event.stopPropagation();openDriverPicker('${key}','${truck}',this)">
+            <img class="truck-driver-img" src="${driverImg}" onerror="this.style.background='#2e3850';this.src=''" alt="${driverName}" />
+            ${isUnavailable ? '<div class="driver-unavail-badge">!</div>' : ''}
+          </div>
+          ${driverTipHTML}
+        </div>`
+      : `<div class="truck-driver-placeholder" onclick="event.stopPropagation();openDriverPicker('${key}','${truck}',this)" title="Assign a driver">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>`;
+
+    html += `<div class="truck-section ${isUnavailable ? 'driver-warn' : ''} ${isLocked ? 'truck-locked' : ''}"
+      ondragover="handleTruckDragOver(event,'${key}','${truck}')"
+      ondragleave="handleTruckDragLeave(event,this)"
+      ondrop="handleTruckDrop(event,'${key}','${truck}')">
+      <div class="truck-header">
+        ${avatarHTML}
+        <div class="truck-info">
+          <div class="truck-name">${driverName || '<span style="color:rgba(0,0,0,0.25);font-style:italic">No driver</span>'}</div>
+          <div class="truck-label">Route ${truck} · ${stops.length}/${MAX_STOPS}${isLocked ? ' · <span style="color:var(--danger)">Unavailable</span>' : ''}${isUnavailable && !isLocked ? ` · <span style="color:var(--danger)">${driverStatus.label}</span>` : ''}</div>
+        </div>
+        <div class="capacity-dots">${capDots}</div>
+        <button class="truck-lock-btn ${isLocked ? 'locked' : ''}" onclick="toggleTruckLock('${truckKey}','${key}','${truck}')" title="${isLocked ? 'Unlock truck' : 'Lock truck (unavailable)'}">
+          ${isLocked ? '🔒' : '🔓'}
+        </button>
+      </div>`;
+
+    if (stops.length === 0) {
+      html += `<div class="stops-list">
+        <div class="truck-empty">${isLocked ? 'Truck unavailable — unlock to open' : 'No stops — drag a card here or use Schedule'}</div>
+      </div>`;
+    } else {
+      html += `<div class="stops-list">
+        <div class="route-endpoint"><span class="endpoint-icon">🏭</span> Fruitland Warehouse</div>`;
+
+      stops.forEach((stop, i) => {
+        const isStaged = !stop.committed;
+        const isCommitted = !!stop.committed;
+        const flags = [
+          stop.firstStopApproved && '<span class="stop-flag flag-first">1st</span>',
+          stop.whiteGlove && '<span class="stop-flag flag-wg">WG</span>',
+          stop.equipRemoval && '<span class="stop-flag flag-remove">RM</span>',
+        ].filter(Boolean).join('');
+
+        const stopDayColor = getDayColor(key.split('-')[0], key);
+        const isFirstStop = isCommitted && i === 0;
+        const crownHtml = isFirstStop ? '<div class="committed-crown">👑</div>' : '';
+        const committedPfpHtml = isCommitted
+          ? (stop.requesterAvatar
+            ? `<div class="committed-pfp-wrap" title="Drag to reorder" style="--day-color:${stopDayColor}">
+                ${crownHtml}
+                <img src="${stop.requesterAvatar}" onerror="this.style.background='#ddd'" />
+                <div class="committed-stop-badge">${i+1}</div>
+              </div>`
+            : `<div class="committed-pfp-wrap" title="Drag to reorder" style="--day-color:${stopDayColor}">
+                ${crownHtml}
+                <div class="committed-pfp-fallback">✓</div>
+                <div class="committed-stop-badge">${i+1}</div>
+              </div>`)
+          : '';
+
+        html += `<div class="stop-item ${isStaged ? 'staged' : ''} ${isCommitted ? 'committed' : ''}" draggable="true"
+          ${isStaged ? `style="--day-color:${stopDayColor}"` : ''}
+          ${isCommitted ? `style="--day-color:${stopDayColor}"` : ''}
+          ondragstart="dragStop(event,'${key}','${truck}',${i})"
+          ondragover="event.preventDefault();this.style.background='rgba(240,201,58,0.06)'"
+          ondragleave="this.style.background=''"
+          ondrop="dropStop(event,'${key}','${truck}',${i});this.style.background=''">
+          ${isCommitted ? committedPfpHtml : `<div class="stop-num" title="Drag to reorder">⠿ ${i+1}</div>`}
+          <div class="stop-content">
+            <div class="stop-name">${stop.cardName || stop.name}</div>
+            <div class="stop-meta">
+              ${stop.address ? `<span>${stop.address.split(',')[0]}</span>` : ''}
+              ${flags}
+            </div>
+          </div>
+          <div class="stop-actions">
+            ${isStaged ? `<button class="stop-commit-btn" onclick="event.stopPropagation();commitSingleCard('${key}','${truck}',${i})" title="Commit to Trello">Commit</button>` : ''}
+            ${isCommitted ? `<button class="stop-btn" onclick="editStop('${key}','${truck}',${i})" title="Edit details">✎</button>` : ''}
+            ${isCommitted ? `<button class="stop-btn remove" onclick="removeStop('${key}','${truck}',${i})" title="Uncommit">✕</button>` : ''}
+            ${isStaged ? `<button class="stop-btn" onclick="editStop('${key}','${truck}',${i})" title="Edit">✎</button>` : ''}
+          </div>
+          ${isStaged && stop.stagedAt ? `<div class="staged-meta"><span class="staged-by">${stop.stagedBy || ''}</span><span class="staged-time">Staged ${new Date(stop.stagedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div>` : ''}
+        </div>`;
+      });
+
+      html += `<div class="route-endpoint"><span class="endpoint-icon">🏠</span> Charlie's HQ</div>
+      </div>`;
+    }
+
+    html += `</div>`;
+  }
+
+  panel.innerHTML = html;
+
+  // Restore truck B/C toggle button visibility
+  const btnB = document.getElementById('truck-b-btn');
+  const btnC = document.getElementById('truck-c-btn');
+  if (state.showTruckB) {
+    if (btnB) btnB.style.display = 'none';
+    if (btnC) btnC.style.display = 'block';
+    if (btnC) btnC.textContent = state.showTruckC ? '− Remove Route C' : '+ Add Route C';
+  } else {
+    if (btnB) btnB.style.display = 'block';
+    if (btnC) btnC.style.display = 'none';
   }
 }
 
 // ════════════════════════════════════════════════════════
-// Clear form
+// INTERACTIONS
 // ════════════════════════════════════════════════════════
-async function clearForm() {
-  formData = {
-    firstStop: false, lastStop: false,
-    dropOff: false, whiteGlove: false,
-    equipRemoval: false, equipRemovalDetail: '',
-    specialRequest: '', customerPhone: '',
-    savedAt: null,
+function toggleRider(cardId) {
+  const card = state.queueCards.find(c => c.id === cardId);
+  if (!card) return;
+  card.rider = !card.rider;
+  renderQueue();
+  if (card.rider) {
+    showToast(`🏷 ${card.name.split(' ').slice(0,3).join(' ')}… flagged as rider — waiting for in-route match`, 'info');
+  } else {
+    showToast(`Rider flag removed`, 'info');
+  }
+}
+
+function toggleExpandCard(cardId) {
+  const card = state.queueCards.find(c => c.id === cardId);
+  if (!card) return;
+
+  // Toggle expanded state
+  state.expandedCard = state.expandedCard === cardId ? null : cardId;
+  state.selectedCard = card;
+
+  // Pulse the map dot
+  state.unscheduledMarkers.forEach((m, i) => {
+    const c = state.queueCards[i];
+    if (!c?.coords) return;
+    const el = m.getElement();
+    if (!el) return;
+    const dot = el.querySelector('.unscheduled-pin');
+    if (!dot) return;
+    if (c.id === cardId) {
+      dot.classList.add('selected');
+      map.panTo([c.coords.lat, c.coords.lng], { animate: true, duration: 0.5 });
+    } else {
+      dot.classList.remove('selected');
+    }
+  });
+
+  renderQueue();
+  updateRouteAnimation();
+}
+
+function dragQueueCard(e, cardId) {
+  e.dataTransfer.setData('text/plain', cardId);
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.classList.add('dragging');
+  state._draggingCardId = cardId;
+}
+
+function endDragQueueCard(e) {
+  e.target.classList.remove('dragging');
+  // Clean up any lingering drop-hover states
+  document.querySelectorAll('.truck-section.drop-hover').forEach(el => { el.classList.remove('drop-hover'); el.style.opacity = ''; });
+  document.querySelectorAll('.truck-section.drop-reject').forEach(el => { el.classList.remove('drop-reject'); el.style.opacity = ''; });
+  state._draggingCardId = null;
+}
+
+// ── DROP ZONE HANDLERS ──
+function handleTruckDragOver(e, dayKey, truck) {
+  e.preventDefault();
+  const section = e.currentTarget;
+  const truckKey = `${dayKey}-${truck}`;
+
+  // Accept stop-to-stop drags (cross-truck reorder)
+  if (dragData) {
+    // Reject: locked truck
+    if (isRouteLocked(dayKey, truck)) {
+      section.classList.add('drop-reject');
+      section.classList.remove('drop-hover');
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    // Reject: same truck (handled by stop-level drop)
+    if (dragData.dayKey === dayKey && dragData.truck === truck) return;
+    // Visual warning for full truck (but still allow drop for overflow)
+    const stops = state.schedule[dayKey]?.[truck] || [];
+    if (stops.length >= MAX_STOPS) {
+      section.classList.add('drop-hover');
+      section.style.opacity = '0.7'; // dimmed to indicate overflow
+      return;
+    }
+    section.classList.add('drop-hover');
+    section.classList.remove('drop-reject');
+    e.dataTransfer.dropEffect = 'move';
+    return;
+  }
+
+  // Queue card drag
+  const cardId = state._draggingCardId;
+  if (!cardId) return;
+
+  const card = state.queueCards.find(c => c.id === cardId);
+
+  // Reject: no coords
+  if (!card?.coords) {
+    section.classList.add('drop-reject');
+    section.classList.remove('drop-hover');
+    e.dataTransfer.dropEffect = 'none';
+    return;
+  }
+
+  // Reject: locked truck
+  if (isRouteLocked(dayKey, truck)) {
+    section.classList.add('drop-reject');
+    section.classList.remove('drop-hover');
+    e.dataTransfer.dropEffect = 'none';
+    return;
+  }
+
+  // Accept
+  section.classList.add('drop-hover');
+  section.classList.remove('drop-reject');
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleTruckDragLeave(e, el) {
+  // Only remove if leaving the truck-section (not entering a child)
+  if (!el.contains(e.relatedTarget)) {
+    el.classList.remove('drop-hover');
+    el.classList.remove('drop-reject');
+    el.style.opacity = '';
+  }
+}
+
+function handleTruckDrop(e, dayKey, truck, insertAtIdx) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const section = e.currentTarget || e.target.closest('.truck-section');
+  if (section) {
+    section.classList.remove('drop-hover');
+    section.classList.remove('drop-reject');
+    section.style.opacity = '';
+  }
+
+  // Case 1: Cross-truck stop reorder (dragData set by dragStop)
+  if (dragData) {
+    const { dayKey: fromDay, truck: fromTruck, idx: fromIdx } = dragData;
+    if (fromDay === dayKey && fromTruck === truck) { dragData = null; return; } // same truck, ignore
+
+    const fromStops = state.schedule[fromDay]?.[fromTruck];
+    const toStops = state.schedule[dayKey]?.[truck] || [];
+    if (!fromStops) { dragData = null; return; }
+
+    const truckKey = `${dayKey}-${truck}`;
+    if (isRouteLocked(dayKey, truck)) {
+      showToast(`🔒 Route ${truck} is locked`, 'warning');
+      dragData = null;
+      return;
+    }
+
+    // Check overflow — same logic as queue→route (Bug 2 fix)
+    const movedStop = fromStops[fromIdx];
+    const ofCheck = checkOverflowAllowed(toStops, movedStop?.coords);
+    if (toStops.length >= MAX_STOPS) {
+      if (!ofCheck.allowed) {
+        showToast(`Route ${truck} is full (${MAX_STOPS} stops) — too far for overflow`, 'error');
+        dragData = null;
+        return;
+      }
+      showToast(`⚠ Over capacity (${toStops.length + 1}/${MAX_STOPS}) — nearby, allowed`, 'warning');
+    }
+
+    if (!state.schedule[dayKey]) state.schedule[dayKey] = {};
+    if (!state.schedule[dayKey][truck]) state.schedule[dayKey][truck] = [];
+
+    const [moved] = fromStops.splice(fromIdx, 1);
+
+    // Committed stop cross-truck warning (Bug 3 fix)
+    if (moved.committed) {
+      showToast(`↔ Committed stop moved to Route ${truck} — Trello comment unchanged`, 'info');
+    }
+
+    const toPos = typeof insertAtIdx === 'number' ? insertAtIdx : state.schedule[dayKey][truck].length;
+    state.schedule[dayKey][truck].splice(toPos, 0, moved);
+    dragData = null;
+    renderRightPanel();
+    renderMap();
+
+    const toLabel = truck.replace('truck','Truck ').replace('a','A').replace('b','B').replace('c','C');
+    showToast(`↔ Moved to ${toLabel}, Stop ${toPos + 1}`, 'info');
+    return;
+  }
+
+  // Case 2: Queue card drop
+  const cardId = e.dataTransfer.getData('text/plain');
+  if (!cardId) return;
+
+  const card = state.queueCards.find(c => c.id === cardId);
+  if (!card) return;
+
+  const truckKey = `${dayKey}-${truck}`;
+
+  // Reject: no address
+  if (!card.coords) {
+    showToast('⚠ Address required — cannot schedule this card', 'error');
+    return;
+  }
+
+  // Reject: no owner
+  if (!card.requesterName) {
+    showToast('⚠ Owner required — assign a member in Trello first', 'error');
+    return;
+  }
+
+  // Reject: locked
+  if (isRouteLocked(dayKey, truck)) {
+    showToast('🔒 Route is locked — unlock to add stops', 'error');
+    return;
+  }
+
+  // Reject: full (4 stops) and not within overflow radius
+  const stops = state.schedule[dayKey]?.[truck] || [];
+  if (stops.length >= MAX_STOPS) {
+    const minDist = stops.reduce((min, s) => Math.min(min, distanceMiles(card.coords, s.coords)), Infinity);
+    if (minDist > OVERFLOW_RADIUS_MILES) {
+      showToast(`Route ${truck} is full (${MAX_STOPS} stops) — card too far for overflow`, 'error');
+      return;
+    }
+    showToast(`⚠ Over capacity (${stops.length + 1}/${MAX_STOPS}) — card is nearby, allowed`, 'warning');
+  }
+
+  // Find best insert position using algo (or use specified position)
+  const insertPos = typeof insertAtIdx === 'number' ? insertAtIdx : bestInsertPosition(stops, card.coords);
+
+  // Build stop object from card (staged, not committed)
+  const newStop = {
+    id: card.id,
+    cardId: card.id,
+    shortLink: card.shortLink,
+    name: card.name,
+    cardName: card.name,
+    address: card.address,
+    coords: card.coords,
+    quadrant: card.quadrant,
+    invTotal: card.invTotal,
+    customerName: card.customerName,
+    customerPhone: card.customerPhone,
+    requesterName: card.requesterName,
+    requesterAvatar: card.requesterAvatar,
+    rsValue: card.rsValue,
+    firstStopRequested: card.firstStopRequested,
+    firstStopApproved: card.firstStopRequested,
+    whiteGlove: card.whiteGlove,
+    equipRemoval: card.equipRemoval,
+    stairs: card.stairs,
+    dropoff: card.dropoff,
+    deliveryNotes: card.deliveryNotes,
+    committed: false,
+    stagedAt: Date.now(),
+    stagedBy: state.currentUser || '',
   };
-  await t.set('card', 'shared', CFG.STORAGE_KEY, formData);
-  viewMode = 'form';
-  render();
+
+  // Insert into schedule
+  if (!state.schedule[dayKey]) state.schedule[dayKey] = {};
+  if (!state.schedule[dayKey][truck]) state.schedule[dayKey][truck] = [];
+  state.schedule[dayKey][truck].splice(insertPos, 0, newStop);
+
+  // Remove from pending queue
+  state.queueCards = state.queueCards.filter(c => c.id !== cardId);
+
+  // Re-render everything
+  renderQueue();
+  renderRightPanel();
+  renderMap();
+
+  showToast(`📦 ${card.name.split(' ').slice(0,3).join(' ')}… → Route ${truck}, Stop ${insertPos + 1}`, 'info');
 }
 
-// ════════════════════════════════════════════════════════
-// Switch to edit mode from summary
-// ════════════════════════════════════════════════════════
-function editForm() {
-  viewMode = 'form';
-  render();
-}
+// ── PER-CARD COMMIT TO TRELLO ──
+async function commitSingleCard(dayKey, truck, stopIndex) {
+  const stops = state.schedule[dayKey]?.[truck];
+  if (!stops || !stops[stopIndex]) return;
 
-// ════════════════════════════════════════════════════════
-// Render — RS nudge (no RS)
-// ════════════════════════════════════════════════════════
-function renderNudge() {
-  document.getElementById('app').innerHTML = `
-    <div class="rs-nudge">
-      <span class="rs-nudge-icon">📋</span>
-      <span class="rs-nudge-text">Fill the <strong>RS</strong> field above to enable shipping instructions</span>
-    </div>`;
-  if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
-}
-
-// ════════════════════════════════════════════════════════
-// Render — Summary view (post-save compact)
-// ════════════════════════════════════════════════════════
-function renderSummary() {
-  const savedLabel = formData.savedAt
-    ? new Date(formData.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
-    : '';
-
-  // Build active flag tags
-  const activeTags = FLAGS
-    .filter(f => formData[f.id])
-    .map(f => `<span class="summary-tag"><span class="tag-icon">${f.icon}</span>${f.tag}</span>`)
-    .join('');
-
-  // Build text details
-  const details = [];
-  if (formData.equipRemoval && formData.equipRemovalDetail) {
-    details.push(`<div class="summary-detail">♻️ <strong>Removal:</strong> ${escHtml(formData.equipRemovalDetail)}</div>`);
-  }
-  if (formData.customerPhone) {
-    details.push(`<div class="summary-detail">📞 <strong>Phone:</strong> ${escHtml(formData.customerPhone)}</div>`);
-  }
-  if (formData.specialRequest) {
-    details.push(`<div class="summary-detail">📝 <strong>Note:</strong> ${escHtml(formData.specialRequest)}</div>`);
+  const stop = stops[stopIndex];
+  if (stop.committed) {
+    showToast('Already committed', 'info');
+    return;
   }
 
-  const hasContent = activeTags || details.length > 0;
+  // Determine scheduled date
+  const allDays = [...getWeekDates(0), ...getWeekDates(1)];
+  const dayInfo = allDays.find(d => d.key === dayKey);
+  if (!dayInfo) { showToast('Could not determine date', 'error'); return; }
 
-  document.getElementById('app').innerHTML = `
-    <div class="summary">
-      <div class="summary-hdr">
-        <div class="summary-hdr-left">
-          <span class="hdr-title">Shipping Request</span>
-          <span class="hdr-status saved">✓ ${savedLabel}</span>
-        </div>
-        <div>
-          <button class="btn-sm" onclick="editForm()">✎ Edit</button>
-        </div>
-      </div>
-      ${hasContent ? `
-        ${activeTags ? `<div class="summary-tags">${activeTags}</div>` : ''}
-        ${details.join('')}
-      ` : `<div class="summary-detail" style="color:var(--sub);font-style:italic">No flags or notes — click Edit to add</div>`}
-    </div>`;
+  // Due date = scheduled day at 5:00 PM Pacific
+  const dueDate = new Date(dayInfo.date);
+  const isDST = dueDate.getMonth() >= 2 && dueDate.getMonth() <= 10; // rough DST
+  dueDate.setHours(17, 0, 0, 0);
+  const offset = isDST ? 7 : 8; // PDT = UTC-7, PST = UTC-8
+  const utcDue = new Date(dueDate.getTime() + offset * 3600000);
 
-  if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
-}
-
-// ════════════════════════════════════════════════════════
-// Render — Full form (editing mode)
-// ════════════════════════════════════════════════════════
-function renderForm() {
-  const hasSaved = !!formData.savedAt;
-  const savedLabel = hasSaved
-    ? new Date(formData.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
-    : null;
-
-  const checkRows = FLAGS.map(f => {
-    const isActive = formData[f.id];
-    const isDisabled = !isActive && f.group && FLAGS.some(other =>
-      other.group === f.group && other.id !== f.id && formData[other.id]
-    );
-
-    const conditionalField = f.hasTextField ? `
-      <div class="conditional-field ${isActive ? 'visible' : ''}" id="cond-${f.id}">
-        <input class="form-input" type="text" id="${f.id}Detail"
-          placeholder="Describe items to remove (e.g., 2 old refrigeration units)"
-          value="${escAttr(formData[f.id + 'Detail'] || '')}"
-        />
-      </div>` : '';
-
-    return `
-      <div class="check-row ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}"
-           id="check-${f.id}"
-           onclick="${isDisabled ? '' : `toggleCheck('${f.id}')`}">
-        <div class="check-box"></div>
-        <span class="check-icon">${f.icon}</span>
-        <span class="check-label">${f.label}</span>
-        <span class="check-sub">${f.sub}</span>
-      </div>
-      ${conditionalField}`;
-  }).join('');
-
-  document.getElementById('app').innerHTML = `
-    <div class="hdr">
-      <div class="hdr-left">
-        <span class="hdr-title">Shipping Request</span>
-        ${hasSaved ? `<span class="hdr-status saved">✓ Saved ${savedLabel}</span>` : ''}
-      </div>
-      <div class="hdr-right">
-        ${hasSaved ? `<button class="btn-sm" onclick="clearForm()">Clear</button>` : ''}
-        <button class="btn-sm primary" onclick="saveForm()" id="saveBtn">Save</button>
-      </div>
-    </div>
-
-    <div class="form-wrap">
-      <div class="section-label">Delivery Instructions</div>
-      ${checkRows}
-
-      <div class="section-label" style="margin-top:14px">Contact</div>
-      <div class="field-row">
-        <div class="field-label">📞 Customer Phone</div>
-        <input class="form-input" type="tel" id="customerPhone"
-          placeholder="e.g., 323-555-1234"
-          value="${escAttr(formData.customerPhone || '')}"
-        />
-      </div>
-
-      <div class="section-label" style="margin-top:14px">Special Request</div>
-      <div class="field-row">
-        <textarea class="form-textarea" id="specialRequest"
-          placeholder="Bring ID, go to loading dock, email invoice only, etc."
-        >${escHtml(formData.specialRequest || '')}</textarea>
-      </div>
-    </div>
-
-    <div class="footer">
-      <span class="footer-info">Data saved to this card · visible in CF Dispatch</span>
-    </div>
-    <div class="status-msg" id="statusMsg"></div>`;
-
-  if (t) requestAnimationFrame(() => t.sizeTo('#app').catch(() => {}));
-}
-
-// ════════════════════════════════════════════════════════
-// Render router
-// ════════════════════════════════════════════════════════
-function render() {
-  if (!hasRS) { renderNudge(); return; }
-  if (viewMode === 'summary' && formData.savedAt) { renderSummary(); return; }
-  renderForm();
-}
-
-// ════════════════════════════════════════════════════════
-// HTML escape helpers
-// ════════════════════════════════════════════════════════
-function escHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-function escAttr(str) {
-  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ════════════════════════════════════════════════════════
-// Auth screen
-// ════════════════════════════════════════════════════════
-function showAuth() {
-  document.getElementById('app').innerHTML = `
-    <div class="auth-screen">
-      <p><strong>One-time setup</strong> — get your Trello token:</p>
-      <p>
-        <a href="https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=${CFG.API_KEY}&name=CF+Shipping+Request" target="_blank">
-          → Open Trello Authorization Page
-        </a><br/>
-        Click <strong>Allow</strong>, then copy and paste the token below:
-      </p>
-      <textarea class="auth-textarea" id="tokenInput" placeholder="Paste token here (starts with ATTA...)"></textarea>
-      <button class="btn-sm primary" style="width:100%;padding:8px" onclick="saveToken()">Save Token</button>
-      <div id="authMsg" style="font-size:11px;color:var(--danger);margin-top:6px;min-height:14px;font-family:monospace"></div>
-    </div>`;
-  if (t) t.sizeTo('#app').catch(() => {});
-}
-
-async function saveToken() {
-  const val = document.getElementById('tokenInput')?.value.trim();
-  const msg = document.getElementById('authMsg');
-  if (!val) { if (msg) msg.textContent = 'Paste your token first.'; return; }
-  if (val.length < 40) { if (msg) msg.textContent = 'Token too short — copy the whole thing.'; return; }
   try {
-    await t.set('member', 'private', 'token', val);
-    token = val;
-    await boot();
-  } catch (e) {
-    if (msg) msg.textContent = 'Error: ' + e.message;
-  }
-}
+    showToast('Committing to Trello…', 'info');
 
-// ════════════════════════════════════════════════════════
-// UI state helper
-// ════════════════════════════════════════════════════════
-function setState(type, msg) {
-  document.getElementById('app').innerHTML = type === 'loading'
-    ? `<div class="state"><div class="spinner"></div>${msg}</div>`
-    : `<div class="state error">⚠️ ${msg}<br/><br/><button class="btn-sm" onclick="boot()">↺ Retry</button></div>`;
-  if (t) t.sizeTo('#app').catch(() => {});
-}
+    // 1. Set due date
+    await trello(`/cards/${stop.cardId}`, 'PUT', { due: utcDue.toISOString() });
 
-// ════════════════════════════════════════════════════════
-// Boot
-// ════════════════════════════════════════════════════════
-async function boot() {
-  setState('loading', 'Initializing...');
-  try {
-    if (!t) {
-      t = window.TrelloPowerUp.iframe({
-        appKey: CFG.API_KEY,
-        appName: 'CF Shipping Request',
+    // 2. Set OT custom field to true
+    const otField = state.customFields?.find(f => f.name === 'OT');
+    if (otField) {
+      await trello(`/cards/${stop.cardId}/customField/${otField.id}/item`, 'PUT', {
+        value: { checked: 'true' }
       });
     }
 
-    token = await t.get('member', 'private', 'token');
-    if (!token) { showAuth(); return; }
+    // 3. Add comment with scheduling info
+    const comment = `📦 Scheduled: ${dayInfo.day} ${dayInfo.date.toLocaleDateString('en-US', {month:'short',day:'numeric'})} · Route ${truck} · Stop ${stopIndex + 1}\n🕐 Due: 5:00 PM Pacific\n📍 Via CF Dispatch`;
+    await trello(`/cards/${stop.cardId}/actions/comments`, 'POST', { text: comment });
 
-    // Check RS custom field — gate the form
-    hasRS = await checkRS();
-
-    // Load saved data regardless (for summary view on reopen)
-    const saved = await t.get('card', 'shared', CFG.STORAGE_KEY);
-    if (saved) {
-      Object.assign(formData, saved);
+    // 4. Move card to salesperson's shipper list
+    // Find the card owner's shipper list (e.g., "Shipper - William")
+    if (stop.cardId) {
+      const cardData = await trello(`/cards/${stop.cardId}?fields=idMembers`);
+      if (cardData.idMembers?.length > 0) {
+        const memberId = cardData.idMembers[0];
+        const member = await trello(`/members/${memberId}?fields=fullName`);
+        const firstName = member.fullName?.split(' ')[0] || '';
+        if (firstName) {
+          const lists = await trello(`/boards/${BOARD_ID}/lists?fields=name`);
+          const shipperList = lists.find(l => l.name.toLowerCase().includes('shipper') && l.name.toLowerCase().includes(firstName.toLowerCase()));
+          if (shipperList) {
+            await trello(`/cards/${stop.cardId}`, 'PUT', { idList: shipperList.id });
+          }
+        }
+      }
     }
 
-    // If data was previously saved, show summary view on reopen
-    if (formData.savedAt) {
-      viewMode = 'summary';
-    } else {
-      viewMode = 'form';
-    }
+    // Mark as committed in local state
+    stop.committed = true;
 
-    render();
-  } catch (e) {
-    console.error('Boot error:', e);
-    if (!token) { showAuth(); return; }
-    setState('error', e.message);
+    renderRightPanel();
+    renderMap();
+    showToast(`✅ ${stop.cardName || stop.name} committed!`, 'success');
+
+  } catch (err) {
+    console.error('Commit failed:', err);
+    showToast('❌ Commit failed — check console', 'error');
   }
 }
 
-boot();
+function scheduleCard(cardId) {
+  const card = state.queueCards.find(c => c.id === cardId);
+  if (!card || !card.coords) return;
+
+  state.selectedCard = card;
+
+  // Run recommendation
+  const suggestion = recommend(card);
+  state.pendingSuggestion = suggestion ? { ...suggestion, card } : null;
+
+  if (suggestion) {
+    showSuggestion(card, suggestion);
+  } else {
+    openAssignModal(card, false);
+  }
+}
+
+function showSuggestion(card, sug) {
+  const banner = document.getElementById('suggestion-banner');
+  const detail = document.getElementById('sug-detail');
+  const meta = document.getElementById('sug-meta');
+
+  const overflowWarn = sug.overflow ? ' ⚠️ Over soft cap' : '';
+  detail.textContent = `${sug.day} · Truck ${sug.truck} · Stop ${sug.insertPos + 1}${overflowWarn}`;
+  meta.textContent = `Closest stop: ${sug.minDist.toFixed(1)} mi away`;
+
+  banner.classList.add('visible');
+  renderMap(); // preview pulse could be added here
+}
+
+function dismissSuggestion() {
+  document.getElementById('suggestion-banner').classList.remove('visible');
+  state.pendingSuggestion = null;
+}
+
+function confirmSuggestion() {
+  const sug = state.pendingSuggestion;
+  if (!sug) return;
+  applyAssignment(sug.card, sug.dayKey, sug.truck, sug.insertPos);
+  dismissSuggestion();
+}
+
+function openAssignModal(card, prefilled) {
+  const c = card || state.selectedCard;
+  if (!c) return;
+
+  document.getElementById('modal-title').textContent = 'Schedule Stop';
+  document.getElementById('modal-sub').textContent = c.name;
+
+  // First stop section
+  const fsSection = document.getElementById('first-stop-section');
+  if (c.firstStopRequested) {
+    fsSection.style.display = 'block';
+    setFirstStopStatus(null); // reset
+  } else {
+    fsSection.style.display = 'none';
+  }
+
+  // Populate day dropdown
+  const daySelect = document.getElementById('modal-day');
+  const allDays = [...getWeekDates(0), ...getWeekDates(1)];
+  daySelect.innerHTML = '<option value="">Select day...</option>' +
+    allDays.map(({ day, date, key }) =>
+      `<option value="${key}">${day} ${date.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</option>`
+    ).join('');
+
+  // Pre-fill from suggestion
+  if (prefilled && state.pendingSuggestion) {
+    const sug = state.pendingSuggestion;
+    daySelect.value = sug.dayKey;
+    document.getElementById('modal-truck').value = sug.truck;
+  }
+
+  // Populate driver dropdown
+  const driverSelect = document.getElementById('modal-driver');
+  driverSelect.innerHTML = '<option value="">Select driver...</option>' +
+    state.drivers.map(d => {
+      const status = getDriverStatus(d);
+      const label = status.available ? d.name.split(' ')[0] : `${d.name.split(' ')[0]} (${status.label})`;
+      return `<option value="${d.id}" ${!status.available ? 'disabled' : ''}>${label}</option>`;
+    }).join('');
+
+  document.getElementById('assign-modal').classList.add('open');
+}
+
+let firstStopModalStatus = null;
+
+function setFirstStopStatus(status) {
+  firstStopModalStatus = status;
+  document.getElementById('fs-approve').className = `fs-btn ${status === 'approved' ? 'selected' : ''}`;
+  document.getElementById('fs-revoke').className = `fs-btn revoke ${status === 'revoked' ? 'selected' : ''}`;
+}
+
+function confirmAssign() {
+  const card = state.selectedCard;
+  if (!card) return;
+
+  const dayKey = document.getElementById('modal-day').value;
+  const truck = document.getElementById('modal-truck').value;
+  const stopPos = document.getElementById('modal-stop').value;
+  const driverId = document.getElementById('modal-driver').value;
+
+  if (!dayKey || !truck) { showToast('Please select a day and truck', 'error'); return; }
+
+  // Assign driver to truck for this day (if selected)
+  if (driverId && dayKey) {
+    state.truckDrivers[`${dayKey}-${truck}`] = driverId;
+    saveTruckDrivers();
+  }
+
+  const pos = stopPos === 'auto' ? bestInsertPosition(state.schedule[dayKey]?.[truck] || [], card.coords) : parseInt(stopPos);
+
+  applyAssignment(card, dayKey, truck, pos, firstStopModalStatus);
+  closeModal('assign-modal');
+}
+
+function applyAssignment(card, dayKey, truck, pos, firstStopStatus = null) {
+  // Validation gates — same checks as drag-and-drop (Bug 7 fix)
+  if (isRouteLocked(dayKey, truck)) {
+    showToast('🔒 Route ' + truck + ' is locked — unlock to schedule', 'error');
+    return;
+  }
+  if (!card.requesterName) {
+    showToast('⚠ Owner required — assign a member in Trello first', 'error');
+    return;
+  }
+  var existingStops = state.schedule[dayKey]?.[truck] || [];
+  var ofCheck = checkOverflowAllowed(existingStops, card.coords);
+  if (existingStops.length >= MAX_STOPS) {
+    if (!ofCheck.allowed) {
+      showToast('Route ' + truck + ' is full (' + MAX_STOPS + ' stops) — card too far for overflow', 'error');
+      return;
+    }
+    showToast('⚠ Over capacity (' + (existingStops.length + 1) + '/' + MAX_STOPS + ') — nearby, allowed', 'warning');
+  }
+
+  if (!state.schedule[dayKey]) state.schedule[dayKey] = {};
+  if (!state.schedule[dayKey][truck]) state.schedule[dayKey][truck] = [];
+
+  const stop = {
+    id: card.id,
+    cardId: card.id,
+    shortLink: card.shortLink,
+    name: card.name,
+    cardName: card.name,
+    address: card.address,
+    coords: card.coords,
+    quadrant: card.quadrant,
+    invTotal: card.invTotal,
+    customerName: card.customerName,
+    customerPhone: card.customerPhone,
+    requesterName: card.requesterName,
+    requesterAvatar: card.requesterAvatar,
+    rsValue: card.rsValue,
+    firstStopRequested: card.firstStopRequested,
+    firstStopApproved: firstStopStatus === 'approved',
+    firstStopRevoked: firstStopStatus === 'revoked',
+    whiteGlove: card.whiteGlove,
+    equipRemoval: card.equipRemoval,
+    stairs: card.stairs,
+    dropoff: card.dropoff,
+    deliveryNotes: card.deliveryNotes,
+    rider: card.rider,
+    committed: false,
+    stagedAt: Date.now(),
+    stagedBy: state.currentUser || '',
+  };
+
+  // Handle first stop lock
+  if (firstStopStatus === 'approved') {
+    state.schedule[dayKey][truck].unshift(stop);
+  } else {
+    state.schedule[dayKey][truck].splice(pos, 0, stop);
+  }
+
+  // Reoptimize order (unless first stop is locked)
+  reoptimizeTruck(dayKey, truck);
+
+  // Remove from queue
+  state.queueCards = state.queueCards.filter(c => c.id !== card.id);
+  state.selectedCard = null;
+
+  // Update right panel active day
+  state.activeRightDay = dayKey;
+
+  showToast(`Scheduled: ${card.name} → ${dayKey} Route ${truck}`, 'success');
+  renderQueue();
+  renderRightPanel();
+  renderMap();
+}
+
+function reoptimizeTruck(dayKey, truck) {
+  const stops = state.schedule[dayKey]?.[truck];
+  if (!stops || stops.length <= 1) return;
+
+  // Find locked first stop
+  const firstIdx = stops.findIndex(s => s.firstStopApproved);
+
+  if (firstIdx >= 0) {
+    const first = stops[firstIdx];
+    const rest = stops.filter((_, i) => i !== firstIdx);
+    // Optimize rest
+    const optimized = optimizeOrder(rest);
+    state.schedule[dayKey][truck] = [first, ...optimized];
+  } else {
+    state.schedule[dayKey][truck] = optimizeOrder(stops);
+  }
+}
+
+function optimizeOrder(stops) {
+  if (stops.length <= 1) return stops;
+  // Brute force for up to 6 stops
+  const perms = permutations(stops);
+  let best = stops, bestDist = loopDistance(stops.map(s => ({ coords: s.coords })));
+  for (const perm of perms) {
+    const d = loopDistance(perm.map(s => ({ coords: s.coords })));
+    if (d < bestDist) { bestDist = d; best = perm; }
+  }
+  return best;
+}
+
+function permutations(arr) {
+  if (arr.length <= 1) return [arr];
+  return arr.flatMap((item, i) =>
+    permutations([...arr.slice(0,i), ...arr.slice(i+1)]).map(p => [item, ...p])
+  );
+}
+
+function removeStop(dayKey, truck, idx) {
+  const stop = state.schedule[dayKey]?.[truck]?.[idx];
+  if (!stop) return;
+
+  // Staged (uncommitted) — instant removal, no dialog
+  if (!stop.committed) {
+    state.schedule[dayKey][truck].splice(idx, 1);
+    state.queueCards.unshift(stopToQueueCard(stop));
+    renderQueue();
+    renderRightPanel();
+    renderMap();
+    showToast(`↩ ${(stop.cardName || stop.name).split(' ').slice(0,3).join(' ')}… returned to queue`, 'info');
+    return;
+  }
+
+  // Committed — confirm dialog, undo Trello changes
+  showConfirm(
+    '🗑️',
+    'Un-commit from schedule?',
+    'This will undo the Trello changes (clear due date, OT field) and return the card to the queue.',
+    async () => {
+      try {
+        // 1. Move to RFS list FIRST (before clearing due date to prevent Butler conflict)
+        const lists = await trello(`/boards/${BOARD_ID}/lists?fields=id,name`);
+        const rfsList = lists.find(l => l.name === 'RFS');
+        if (rfsList) {
+          await trello(`/cards/${stop.id}`, 'PUT', { idList: rfsList.id });
+        }
+
+        // 2. Clear due date
+        await trello(`/cards/${stop.id}`, 'PUT', { due: null });
+
+        // 3. Clear OT field
+        await trello(`/cards/${stop.id}/customField/${CUSTOM_FIELDS.OT}/item`, 'PUT', { value: { checked: 'false' } });
+
+        // 4. Post comment
+        await trello(`/cards/${stop.id}/actions/comments`, 'POST', { text: '🔄 Removed from schedule via CF Dispatch' });
+
+        state.schedule[dayKey][truck].splice(idx, 1);
+        reoptimizeTruck(dayKey, truck);
+        state.queueCards.unshift(stopToQueueCard(stop));
+
+        showToast(`${stop.cardName || stop.name} un-committed and returned to queue`, 'info');
+        renderQueue();
+        renderRightPanel();
+        renderMap();
+      } catch (e) {
+        showToast('Failed to unschedule in Trello — try again', 'error');
+      }
+    }
+  );
+}
+
+function editStop(dayKey, truck, idx) {
+  const stop = state.schedule[dayKey]?.[truck]?.[idx];
+  if (!stop) return;
+  state.selectedCard = stop;
+  openAssignModal(stop, false);
+}
+
+let dragData = null;
+
+function dragStop(e, dayKey, truck, idx) {
+  dragData = { dayKey, truck, idx };
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function dropStop(e, dayKey, truck, toIdx) {
+  e.preventDefault();
+  e.stopPropagation(); // Don't bubble to truck-section drop handler
+
+  // Case 1: Queue card dropped onto a specific stop position
+  const cardId = e.dataTransfer.getData('text/plain');
+  if (cardId && !dragData) {
+    // Delegate to truck drop handler with specific insert position
+    handleTruckDrop(e, dayKey.replace('schedule-',''), truck, toIdx);
+    return;
+  }
+
+  if (!dragData) return;
+  const { dayKey: fromDay, truck: fromTruck, idx: fromIdx } = dragData;
+
+  // Same truck reorder
+  if (fromDay === dayKey && fromTruck === truck) {
+    if (fromIdx === toIdx) { dragData = null; return; }
+    const stops = state.schedule[dayKey][truck];
+    const [moved] = stops.splice(fromIdx, 1);
+    stops.splice(toIdx, 0, moved);
+    dragData = null;
+    renderRightPanel();
+    renderMap();
+    showToast('Stop order updated', 'info');
+    return;
+  }
+
+  // Cross-truck move (same day or different day)
+  const fromStops = state.schedule[fromDay]?.[fromTruck];
+  const toStops = state.schedule[dayKey]?.[truck];
+  if (!fromStops || !toStops) { dragData = null; return; }
+
+  // Check if target truck is locked (Bug 4 fix — use helper, kill dead pattern)
+  if (isRouteLocked(dayKey, truck)) {
+    showToast(`🔒 Route ${truck} is locked`, 'warning');
+    dragData = null;
+    return;
+  }
+
+  // Check capacity with overflow proximity (Bug 1 fix — was hard-coded 4, no proximity)
+  const movedStop = fromStops[fromIdx];
+  const ofCheck = checkOverflowAllowed(toStops, movedStop?.coords);
+  if (toStops.length >= MAX_STOPS) {
+    if (!ofCheck.allowed) {
+      showToast(`Route ${truck} is full (${MAX_STOPS} stops) — too far for overflow`, 'error');
+      dragData = null;
+      return;
+    }
+    showToast(`⚠ Over capacity (${toStops.length + 1}/${MAX_STOPS}) — nearby, allowed`, 'warning');
+  }
+
+  const [moved] = fromStops.splice(fromIdx, 1);
+  toStops.splice(toIdx, 0, moved);
+  dragData = null;
+  renderRightPanel();
+  renderMap();
+
+  // Bug 3 fix — committed cross-truck awareness toast
+  if (moved.committed) {
+    showToast(`↔ Committed stop moved to Route ${truck} — Trello comment unchanged`, 'info');
+  } else {
+    showToast(`↔ Moved to ${toLabel}, Stop ${toIdx + 1}`, 'info');
+  }
+}
+
+// ── DRAG STOP BACK TO QUEUE (UN-SCHEDULE) ──
+function handleQueueDragOver(e) {
+  if (!dragData) return; // only accept stop drags, not queue card drags
+  e.preventDefault();
+  e.currentTarget.style.outline = '2px dashed rgba(240,201,58,0.5)';
+  e.currentTarget.style.outlineOffset = '-2px';
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleQueueDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.style.outline = '';
+    e.currentTarget.style.outlineOffset = '';
+  }
+}
+
+function handleQueueDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.outline = '';
+  e.currentTarget.style.outlineOffset = '';
+
+  if (!dragData) return;
+  const { dayKey, truck, idx } = dragData;
+  const stops = state.schedule[dayKey]?.[truck];
+  if (!stops || !stops[idx]) { dragData = null; return; }
+
+  const stop = stops[idx];
+
+  // Don't allow un-scheduling committed stops
+  if (stop.committed) {
+    showToast('⚠ Already committed to Trello — cannot un-schedule', 'warning');
+    dragData = null;
+    return;
+  }
+
+  // Remove from schedule
+  stops.splice(idx, 1);
+
+  // Rebuild as queue card using standardized helper (Bug 6 fix — was missing rider)
+  const queueCard = stopToQueueCard(stop);
+  state.queueCards.push(queueCard);
+
+  dragData = null;
+  renderQueue();
+  renderRightPanel();
+  renderMap();
+  showToast(`↩ ${(stop.cardName || stop.name).split(' ').slice(0,3).join(' ')}… returned to queue`, 'info');
+}
+
+function toggleTruckB() {
+  state.showTruckB = !state.showTruckB;
+  const btnB = document.getElementById('truck-b-btn');
+  const btnC = document.getElementById('truck-c-btn');
+  if (state.showTruckB) {
+    if (btnB) btnB.style.display = 'none';
+    if (btnC) btnC.style.display = 'block';
+  } else {
+    if (btnB) btnB.style.display = 'block';
+    if (btnC) btnC.style.display = 'none';
+    state.showTruckC = false; // removing B also removes C
+  }
+  renderRightPanel();
+}
+
+function toggleTruckC() {
+  state.showTruckC = !state.showTruckC;
+  const btn = document.getElementById('truck-c-btn');
+  if (btn) btn.textContent = state.showTruckC ? '− Remove Route C' : '+ Add Route C';
+  renderRightPanel();
+}
+
+function toggleTruckLock(truckKey, dayKey, truck) {
+  const isCurrentlyLocked = state.lockedTrucks[truckKey];
+
+  if (isCurrentlyLocked) {
+    // UNLOCK — simple
+    state.lockedTrucks[truckKey] = false;
+    saveLockState();
+    renderRightPanel();
+    renderMap();
+    showToast('🔓 Route unlocked — available for scheduling', 'info');
+    return;
+  }
+
+  // LOCK — check if truck has stops
+  const stops = state.schedule[dayKey]?.[truck] || [];
+
+  if (stops.length === 0) {
+    // Empty truck — lock immediately
+    state.lockedTrucks[truckKey] = true;
+    saveLockState();
+    renderRightPanel();
+    renderMap();
+    showToast('🔒 Route locked — unavailable', 'info');
+    return;
+  }
+
+  // Truck has stops — confirm dialog
+  const committedCount = stops.filter(s => s.committed).length;
+  const totalCount = stops.length;
+  const msg = committedCount > 0
+    ? `${totalCount} stop${totalCount > 1 ? 's' : ''} (${committedCount} committed) will return to Pending. Trello changes will be undone.`
+    : `${totalCount} stop${totalCount > 1 ? 's' : ''} will return to Pending.`;
+
+  showConfirm(
+    '🔒',
+    `Lock Route ${truck}?`,
+    msg,
+    async () => {
+      // Bounce all stops back to queue
+      const stopsToReturn = [...stops];
+      state.schedule[dayKey][truck] = [];
+
+      for (const stop of stopsToReturn) {
+        if (stop.committed) {
+          // Committed card — undo Trello changes
+          try {
+            // 1. Get card member username for @mention
+            let memberMention = '';
+            try {
+              const members = await trello(`/cards/${stop.id}/members`);
+              if (members && members.length > 0) {
+                memberMention = ` @${members[0].username}`;
+              }
+            } catch(e) { /* no member found, skip mention */ }
+
+            // 2. Move to RFS list FIRST (before clearing due date to prevent Butler conflict)
+            const lists = await trello(`/boards/${BOARD_ID}/lists?fields=id,name`);
+            const rsList = lists.find(l => l.name === 'RFS');
+            if (rsList) {
+              await trello(`/cards/${stop.id}`, 'PUT', { idList: rsList.id });
+            }
+
+            // 3. Clear due date
+            await trello(`/cards/${stop.id}`, 'PUT', { due: null });
+
+            // 4. Clear OT field
+            await trello(`/cards/${stop.id}/customField/${CUSTOM_FIELDS.OT}/item`, 'PUT', { value: { checked: 'false' } });
+
+            // 5. Post comment with @mention for Butler → Slack notification
+            await trello(`/cards/${stop.id}/actions/comments`, 'POST', {
+              text: `🔒 Truck unavailable — returned to Pending via CF Dispatch${memberMention}`
+            });
+          } catch(e) {
+            console.error('Failed to undo Trello for', stop.name, e);
+          }
+        }
+
+        // Return card to queue (Bug 8 fix — use helper, was missing requesterAvatar)
+        state.queueCards.push(stopToQueueCard(stop));
+      }
+
+      // Lock the truck
+      state.lockedTrucks[truckKey] = true;
+      saveLockState();
+
+      renderQueue();
+      renderRightPanel();
+      renderMap();
+
+      showToast(`🔒 Route ${truck} locked — ${totalCount} stop${totalCount > 1 ? 's' : ''} returned to Pending`, 'info');
+    }
+  );
+}
+
+// ── LOCK STATE PERSISTENCE ──
+function saveLockState() {
+  try {
+    localStorage.setItem('cf-dispatch-locks', JSON.stringify(state.lockedTrucks));
+  } catch(e) { /* localStorage unavailable */ }
+}
+
+function loadLockState() {
+  try {
+    const saved = localStorage.getItem('cf-dispatch-locks');
+    if (saved) {
+      state.lockedTrucks = JSON.parse(saved);
+    }
+  } catch(e) { /* localStorage unavailable */ }
+}
+
+// ── QUEUE SORT HELPER ──
+// Note: renderQueue() already sorts by RS date → creation date. No separate sort needed.
+
+// ════════════════════════════════════════════════════════
+// DRIVER PICKER (inline popover)
+// ════════════════════════════════════════════════════════
+let activeDriverPicker = null;
+
+function openDriverPicker(dayKey, truck, anchorEl) {
+  // Close any existing picker
+  closeDriverPicker();
+
+  const truckKey = `${dayKey}-${truck}`;
+  const currentDriverId = state.truckDrivers[truckKey] || null;
+
+  const picker = document.createElement('div');
+  picker.className = 'driver-picker';
+  picker.id = 'active-driver-picker';
+
+  // Position near the anchor, clamped to viewport
+  const rect = anchorEl.getBoundingClientRect();
+  const pickerWidth = 220;
+  let left = rect.left;
+  // If it would overflow right side, align to right edge of anchor
+  if (left + pickerWidth > window.innerWidth) {
+    left = rect.right - pickerWidth;
+  }
+  // Final clamp
+  left = Math.max(8, Math.min(left, window.innerWidth - pickerWidth - 8));
+  picker.style.top = `${rect.bottom + 6}px`;
+  picker.style.left = `${left}px`;
+
+  let html = `<div class="driver-picker-title">Assign driver · Route ${truck}</div>`;
+
+  // "Unassign" option if currently assigned
+  if (currentDriverId) {
+    html += `<div class="driver-option unassign" onclick="assignDriverToTruck('${dayKey}','${truck}',null)">
+      <div class="driver-placeholder-small">✕</div>
+      <div class="driver-option-info">
+        <div class="driver-option-name" style="color:rgba(0,0,0,0.42)">Remove driver</div>
+      </div>
+    </div>`;
+  }
+
+  state.drivers.forEach(d => {
+    const status = getDriverStatus(d);
+    const firstName = d.name.split(' ')[0];
+    const imgSrc = `assets/${firstName.toLowerCase()}.png`;
+    const isSelected = d.id === currentDriverId;
+    const statusClass = !status.available ? 'away' : (status.label ? 'soon' : '');
+
+    // Check if this driver is already assigned to another truck on the same day
+    let alreadyAssigned = null;
+    for (const t of ['A','B','C']) {
+      if (t === truck) continue;
+      if (state.truckDrivers[`${dayKey}-${t}`] === d.id) {
+        alreadyAssigned = t;
+        break;
+      }
+    }
+
+    html += `<div class="driver-option ${isSelected ? 'selected' : ''} ${!status.available ? 'unavailable-option' : ''}" onclick="assignDriverToTruck('${dayKey}','${truck}','${d.id}')">
+      <img src="${imgSrc}" onerror="this.style.background='#2e3850';this.src=''" alt="${firstName}" />
+      <div class="driver-option-info">
+        <div class="driver-option-name">${firstName}${isSelected ? ' ✓' : ''}</div>
+        <div class="driver-option-status ${statusClass}">
+          ${!status.available ? status.label : (alreadyAssigned ? `on Truck ${alreadyAssigned}` : (status.label || 'Available'))}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  picker.innerHTML = html;
+  document.body.appendChild(picker);
+  activeDriverPicker = picker;
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', closeDriverPickerOutside);
+  }, 10);
+}
+
+function closeDriverPickerOutside(e) {
+  const picker = document.getElementById('active-driver-picker');
+  if (picker && !picker.contains(e.target)) {
+    closeDriverPicker();
+  }
+}
+
+function closeDriverPicker() {
+  const picker = document.getElementById('active-driver-picker');
+  if (picker) picker.remove();
+  activeDriverPicker = null;
+  document.removeEventListener('click', closeDriverPickerOutside);
+}
+
+function assignDriverToTruck(dayKey, truck, driverId) {
+  const truckKey = `${dayKey}-${truck}`;
+
+  if (driverId === null || driverId === 'null') {
+    delete state.truckDrivers[truckKey];
+    showToast(`Route ${truck} driver removed`, 'info');
+  } else {
+    // Check if driver is unavailable — warn but still allow
+    const driver = state.drivers.find(d => d.id === driverId);
+    const status = driver ? getDriverStatus(driver) : null;
+
+    // If driver is on another truck same day, swap them
+    for (const t of ['A','B','C']) {
+      if (t === truck) continue;
+      if (state.truckDrivers[`${dayKey}-${t}`] === driverId) {
+        delete state.truckDrivers[`${dayKey}-${t}`];
+      }
+    }
+
+    state.truckDrivers[truckKey] = driverId;
+    const name = driver?.name?.split(' ')[0] || 'Driver';
+
+    if (status && !status.available) {
+      showToast(`⚠ ${name} assigned to Route ${truck} — but ${status.label}`, 'error');
+    } else {
+      showToast(`${name} → Route ${truck}`, 'success');
+    }
+  }
+
+  saveTruckDrivers();
+  closeDriverPicker();
+  renderRightPanel();
+  renderMap();
+}
+
+// ════════════════════════════════════════════════════════
+// COMMIT TO TRELLO
+// ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// DATA LOADING
+// ════════════════════════════════════════════════════════
+async function loadData() {
+  setSyncStatus('syncing', 'Syncing...');
+
+  try {
+    // Load drivers from hidden board
+    await loadDrivers();
+
+    // Load all board lists to find "RFS"
+    const lists = await trello(`/boards/${BOARD_ID}/lists?fields=id,name`);
+    let rfsListId = lists.find(l => l.name === 'RFS')?.id;
+
+    // Auto-create if missing
+    if (!rfsListId) {
+      const newList = await trello(`/boards/${BOARD_ID}/lists`, 'POST', { name: 'RFS', pos: 'top' });
+      rfsListId = newList.id;
+      showToast('"RFS" list created', 'info');
+    }
+
+    // Load cards from that list
+    const cards = await trello(`/lists/${rfsListId}/cards?customFieldItems=true&attachments=false&fields=id,name,shortLink,desc,due,dueStart,coordinates,address,locationName&pluginData=true&members=true&member_fields=fullName,avatarUrl,username`);
+
+    // Geocode addresses
+    const processed = [];
+    for (const card of cards) {
+      const processed_card = await processCard(card);
+      processed.push(processed_card);
+    }
+
+    state.queueCards = processed;
+
+    // Remove cards that have been dragged into the schedule (staged or committed)
+    const scheduledCardIds = new Set();
+    for (const dayKey of Object.keys(state.schedule)) {
+      for (const truck of Object.keys(state.schedule[dayKey])) {
+        for (const stop of state.schedule[dayKey][truck]) {
+          if (stop.cardId) scheduledCardIds.add(stop.cardId);
+        }
+      }
+    }
+    state.queueCards = state.queueCards.filter(c => !scheduledCardIds.has(c.id));
+
+    // Load already-scheduled cards (OT = true) for map display
+    await loadScheduledCards();
+
+    setSyncStatus('ok', `Synced · ${new Date().toLocaleTimeString()}`);
+    renderQueue();
+    renderRightPanel();
+    renderMap();
+
+  } catch (e) {
+    setSyncStatus('error', 'Sync failed');
+    if (!e.message?.includes('AUTH')) showToast('Failed to load data from Trello', 'error');
+  }
+}
+
+async function loadDrivers() {
+  const cards = await trello(`/lists/${DRIVERS_LIST_ID}/cards?attachments=true&checklists=all&fields=id,name,due,start,desc&limit=50`);
+  state.drivers = cards.map((c) => {
+    // Parse driver info from "Driver Info" checklist
+    const infoChecklist = c.checklists?.find(cl => cl.name.toLowerCase().includes('driver info'));
+    const checklistData = {};
+    if (infoChecklist) {
+      infoChecklist.checkItems?.forEach(item => {
+        const text = item.name.trim();
+        // Parse "Key: Value" or "Key Value" patterns
+        const colonMatch = text.match(/^([^:]+):\s*(.+)$/);
+        if (colonMatch) {
+          checklistData[colonMatch[1].trim().toLowerCase()] = colonMatch[2].trim();
+        }
+      });
+    }
+
+    // Phone: try checklist first, then description fallback
+    const phone = checklistData.phone || checklistData['phone number'] || checklistData.mobile || checklistData.cell || (() => {
+      const phoneMatch = c.desc?.match(/(\+?1?\s*[-.]?\s*\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4})/);
+      return phoneMatch ? phoneMatch[1].trim() : null;
+    })();
+
+    return {
+      id: c.id,
+      name: c.name,
+      phone: phone,
+      driverInfo: checklistData,
+      photo: c.attachments?.find(a => a.previews?.length)?.previews?.slice(-1)[0]?.url || null,
+      unavailableFrom: c.start || null,
+      unavailableUntil: c.due || null,
+    };
+  });
+
+  // Restore saved driver assignments from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('cf_dispatch_truck_drivers') || '{}');
+    state.truckDrivers = saved;
+  } catch { state.truckDrivers = {}; }
+}
+
+function saveTruckDrivers() {
+  localStorage.setItem('cf_dispatch_truck_drivers', JSON.stringify(state.truckDrivers));
+}
+
+function getDriverForTruck(dayKey, truck) {
+  const truckKey = `${dayKey}-${truck}`;
+  const driverId = state.truckDrivers[truckKey];
+  if (!driverId) return null;
+  return state.drivers.find(d => d.id === driverId) || null;
+}
+
+function renderDriverBar() {
+  const chips = document.getElementById('driver-chips');
+  if (!chips) return;
+  chips.innerHTML = state.drivers.map(d => {
+    const status = getDriverStatus(d);
+    const imgSrc = `assets/${d.name.split(' ')[0].toLowerCase()}.png`;
+    return `<div class="driver-chip ${!status.available ? 'unavailable' : ''}">
+      <img class="driver-avatar" src="${imgSrc}" onerror="this.style.background='#2e3850'" alt="${d.name}" />
+      <span class="driver-name">${d.name.split(' ')[0]}</span>
+      ${status.label ? `<span class="driver-status">${status.label}</span>` : ''}
+    </div>`;
+  }).join('<span class="driver-bar-sep">·</span>');
+}
+
+async function processCard(card) {
+  // Extract custom field values
+  const fields = card.customFieldItems || [];
+  const rsField = fields.find(f => f.idCustomField === CUSTOM_FIELDS.RS);
+  const invField = fields.find(f => f.idCustomField === CUSTOM_FIELDS.INV_TOTAL);
+
+  // Get location directly from card fields (Trello stores Google Places coords here)
+  let address = card.address || null;
+  let coords = null;
+  let quadrant = null;
+
+  if (card.coordinates?.latitude && card.coordinates?.longitude) {
+    // Google-accurate coords straight from Trello — no geocoding needed
+    coords = { lat: card.coordinates.latitude, lng: card.coordinates.longitude };
+    quadrant = getQuadrant(coords);
+  } else if (address) {
+    // Fallback: geocode the address text if no coords on card
+    coords = await geocode(address);
+    if (coords) quadrant = getQuadrant(coords);
+  }
+
+  // Parse delivery instructions from card comments (submitted via request form)
+  const commentData = parseDeliveryComment(card.desc || '');
+
+  // Card owner (assigned Trello member = salesperson)
+  const requester = card.members?.[0] || null;
+
+  return {
+    id: card.id,
+    name: card.name,
+    shortLink: card.shortLink,
+    address,
+    coords,
+    quadrant,
+    rsValue: rsField?.value?.text || '',
+    invTotal: invField?.value?.number || null,
+    customerName: commentData.customerName,
+    customerPhone: commentData.customerPhone,
+    firstStopRequested: commentData.firstStop,
+    stairs: commentData.stairs,
+    equipRemoval: commentData.removal,
+    whiteGlove: commentData.whiteGlove,
+    dropoff: commentData.dropoff,
+    deliveryNotes: commentData.notes,
+    requesterName: requester?.fullName || null,
+    requesterAvatar: requester?.avatarUrl ? (requester.avatarUrl + '/50.png') : null,
+    flags: [
+      commentData.stairs && '🪜 Stairs',
+      commentData.whiteGlove && '🤍 White Glove',
+      commentData.removal && '🔧 Removal',
+    ].filter(Boolean),
+  };
+}
+
+function getQuadrant(coords) {
+  const dLat = coords.lat - FRUITLAND.lat;
+  const dLng = coords.lng - FRUITLAND.lng;
+  const ns = dLat >= 0 ? 'N' : 'S';
+  const ew = dLng >= 0 ? 'E' : 'W';
+  return Math.abs(dLat) < 0.02 && Math.abs(dLng) < 0.02 ? 'LOCAL' : `${ns}${ew}`;
+}
+
+function parseDeliveryComment(text) {
+  // Parse structured comment from request.html
+  return {
+    customerName: text.match(/👤 Customer: (.+)/)?.[1]?.trim() || null,
+    customerPhone: text.match(/📞 Phone: (.+)/)?.[1]?.trim() || null,
+    firstStop: text.includes('FIRST STOP REQUESTED'),
+    stairs: text.includes('☑ Stairs'),
+    removal: text.includes('☑ Equipment Removal'),
+    whiteGlove: text.includes('☑ White Glove'),
+    dropoff: text.includes('☑ Drop-off'),
+    notes: text.match(/📝 Notes: (.+)/)?.[1]?.trim() || null,
+  };
+}
+
+async function loadScheduledCards() {
+  // Load all SHIPPER lists and find OT=true cards for map
+  const lists = await trello(`/boards/${BOARD_ID}/lists?fields=id,name`);
+  const shipperLists = lists.filter(l => l.name.startsWith('SHIPPER'));
+
+  for (const list of shipperLists) {
+    try {
+      const cards = await trello(`/lists/${list.id}/cards?customFieldItems=true&fields=id,name,shortLink,due`);
+      for (const card of cards) {
+        const otField = card.customFieldItems?.find(f => f.idCustomField === CUSTOM_FIELDS.OT);
+        if (otField?.value?.checked === 'true' && card.due) {
+          // Add to schedule display
+          const dueDate = new Date(card.due);
+          const day = DAYS[dueDate.getDay() - 1];
+          if (!day) continue;
+
+          const processed = await processCard(card);
+          if (!processed.coords) continue;
+
+          // Determine week
+          const week1 = getWeekDates(0);
+          const week2 = getWeekDates(1);
+          const w1Match = week1.find(d => d.date.toDateString() === dueDate.toDateString());
+          const w2Match = week2.find(d => d.date.toDateString() === dueDate.toDateString());
+          const dayKey = w1Match?.key || w2Match?.key;
+          if (!dayKey) continue;
+
+          if (!state.schedule[dayKey]) state.schedule[dayKey] = {};
+          if (!state.schedule[dayKey].A) state.schedule[dayKey].A = [];
+          state.schedule[dayKey].A.push({ ...processed, pendingCommit: false });
+        }
+      }
+    } catch {}
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════
+
+function renderDayPills() {
+  const container = document.getElementById('map-controls');
+  if (!container) return;
+  const week1 = getWeekDates(0);
+  const week2 = getWeekDates(1);
+  const allDays = [...week1, ...week2];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  let html = `<div class="day-pill ${state.activeDayFilter === 'ALL' ? 'active' : ''}" style="${state.activeDayFilter === 'ALL' ? 'background:#f0c93a;border-color:#f0c93a' : ''}" onclick="setDayFilter('ALL')"><span class="pill-day">ALL</span></div>`;
+
+  allDays.forEach(({ day, date, key }) => {
+    const isActive = state.activeDayFilter === key;
+    const dayColor = getDayColor(day, key);
+    const activeStyle = isActive ? `background:${dayColor};border-color:${dayColor}` : '';
+    html += `<div class="day-pill ${isActive ? 'active' : ''}" style="${activeStyle}" onclick="setDayFilter('${key}')">
+      <span class="pill-day">${day}</span>
+      <span class="pill-date">${date.getDate()} ${months[date.getMonth()]}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function setDayFilter(key) {
+  state.activeDayFilter = key;
+
+  // Also update right panel to show the selected day's routes
+  if (key !== 'ALL') {
+    state.activeRightDay = key;
+  } else {
+    // ALL selected — show today's date (or nearest working day)
+    const now = new Date();
+    const todayName = ['SUN','MON','TUE','WED','THU','FRI','SAT'][now.getDay()];
+    const allDates = [...getWeekDates(0), ...getWeekDates(1)];
+    const today = allDates.find(d => {
+      const s = d.date;
+      return s.getFullYear() === now.getFullYear() && s.getMonth() === now.getMonth() && s.getDate() === now.getDate();
+    });
+    if (today) {
+      state.activeRightDay = today.key;
+    }
+    // If today isn't in the 10-day window, keep current activeRightDay
+  }
+
+  renderDayPills();
+  renderRightPanel();
+  renderMap();
+}
+
+function filterQueue() { renderQueue(); }
+
+function setSyncStatus(type, text) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  label.textContent = text;
+  dot.style.background = type === 'ok' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--accent)';
+}
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  const icons = { success: '✅', error: '⚠️', info: 'ℹ️' };
+  toast.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity='0'; toast.style.transform='translateX(10px)'; toast.style.transition='all 0.3s'; setTimeout(()=>toast.remove(), 300); }, 4000);
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function openSettings() {
+  document.getElementById('settings-token').value = TOKEN !== 'TRELLO_TOKEN_PLACEHOLDER' ? TOKEN : '';
+  document.getElementById('settings-overlay').classList.add('open');
+}
+
+async function saveSettings() {
+  const newToken = document.getElementById('settings-token').value.trim();
+  if (!newToken) { showToast('Please enter a token', 'error'); return; }
+
+  TOKEN = newToken;
+  localStorage.setItem('cf_dispatch_token', TOKEN);
+
+  // Test connection
+  try {
+    await trello(`/boards/${BOARD_ID}?fields=name`);
+    document.getElementById('connection-status-wrap').style.display = 'block';
+    document.getElementById('conn-status-icon').textContent = '✅';
+    document.getElementById('conn-status-text').textContent = 'Connected to CF ASANA';
+    showToast('Connected successfully', 'success');
+    closeModal('settings-overlay');
+    loadData();
+  } catch {
+    document.getElementById('connection-status-wrap').style.display = 'block';
+    document.getElementById('conn-status-icon').textContent = '❌';
+    document.getElementById('conn-status-text').textContent = 'Connection failed — check token';
+  }
+}
+
+function showConfirm(icon, title, msg, onConfirm) {
+  document.getElementById('confirm-icon').textContent = icon;
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent = msg;
+  const okBtn = document.getElementById('confirm-ok-btn');
+  okBtn.onclick = () => { closeModal('confirm-dialog'); onConfirm(); };
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+
+async function refreshData() {
+  await loadData();
+  showToast('Data refreshed', 'info');
+}
+
+// ════════════════════════════════════════════════════════
+// AUTO SYNC
+// ════════════════════════════════════════════════════════
+setInterval(loadData, 60000);
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  initMap();
+
+  // Restore lock state from localStorage
+  loadLockState();
+
+  // Set default right panel day to next Monday
+  const week1 = getWeekDates(0);
+  state.activeRightDay = week1[0].key;
+
+  // Render dynamic day pills
+  renderDayPills();
+
+  // Load data
+  loadData();
+});
 </script>
+
+<!-- BRAND FLOAT -->
+<div class="brand-float">
+  <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">
+    <img src="assets/dispatch-logo-new.png" class="brand-logo" alt="Dispatch" />
+    <span class="brand-byline" style="align-self:flex-end;">by: will.powah</span>
+  </div>
+</div>
+
+<!-- ACTION BUTTONS -->
+<div class="action-float">
+  <div class="sync-indicator" style="display:flex;align-items:center;gap:4px;margin-right:4px;">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-label" style="font-size:9px;color:rgba(0,0,0,0.22);font-family:'Inter Tight',sans-serif;white-space:nowrap;">Connecting...</span>
+  </div>
+  <button class="btn-icon" onclick="refreshData()" title="Refresh">↻</button>
+  <button class="btn-icon" onclick="openSettings()" title="Settings">⚙</button>
+</div>
+
 </body>
 </html>
