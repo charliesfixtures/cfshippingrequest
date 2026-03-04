@@ -271,6 +271,7 @@ let formData = {
   pickUpMemo: false,
   pickUpMemoDetail: '',
   specialRequest: '',
+  customerName: '',
   customerPhone: '',
   savedAt: null,
 };
@@ -332,8 +333,11 @@ async function checkRS() {
 // Check RS via REST API (bypasses SDK cache, used by poller)
 // ════════════════════════════════════════════════════════
 let cachedCardId = null;
+let rsPolling = false; // overlap guard
 
 async function checkRS_REST() {
+  if (rsPolling) return hasRS; // skip if previous call still in-flight
+  rsPolling = true;
   try {
     const rsFieldId = await findRSFieldId();
     if (!rsFieldId) return true; // graceful fail
@@ -345,10 +349,15 @@ async function checkRS_REST() {
 
     const cfItems = await api(`/cards/${cachedCardId}/customFieldItems`);
     const rsField = cfItems.find(cf => cf.idCustomField === rsFieldId);
-    return !!(rsField && rsField.value && (rsField.value.text || rsField.value.date || rsField.value.number));
+    // Handle all cases: item missing, value null, value empty object, value.text empty string
+    if (!rsField || !rsField.value) return false;
+    const v = rsField.value;
+    return !!(v.text || v.date || v.number);
   } catch (e) {
-    console.warn('REST RS check failed:', e);
+    console.warn('REST RS check failed:', e.message);
     return hasRS; // keep current state on error
+  } finally {
+    rsPolling = false;
   }
 }
 
@@ -389,7 +398,7 @@ function readFormFromDOM() {
     firstStop: false, lastStop: false,
     deliveryMemo: false, deliveryMemoDetail: '',
     pickUpMemo: false, pickUpMemoDetail: '',
-    specialRequest: '', customerPhone: '',
+    specialRequest: '', customerName: '', customerPhone: '',
   };
 
   FLAGS.forEach(f => {
@@ -405,6 +414,9 @@ function readFormFromDOM() {
 
   const special = document.getElementById('specialRequest');
   if (special) data.specialRequest = special.value.trim();
+
+  const cname = document.getElementById('customerName');
+  if (cname) data.customerName = cname.value.trim();
 
   const phone = document.getElementById('customerPhone');
   if (phone) data.customerPhone = phone.value.trim();
@@ -479,7 +491,7 @@ async function clearForm() {
     firstStop: false, lastStop: false,
     deliveryMemo: false, deliveryMemoDetail: '',
     pickUpMemo: false, pickUpMemoDetail: '',
-    specialRequest: '', customerPhone: '',
+    specialRequest: '', customerName: '', customerPhone: '',
     savedAt: null,
   };
   await t.set('card', 'shared', CFG.STORAGE_KEY, formData);
@@ -542,6 +554,9 @@ function renderSummary() {
   }
   if (formData.pickUpMemo && formData.pickUpMemoDetail) {
     details.push(`<div class="summary-detail">♻️ <strong>Pick-up:</strong> ${escHtml(formData.pickUpMemoDetail)}</div>`);
+  }
+  if (formData.customerName) {
+    details.push(`<div class="summary-detail">👤 <strong>Contact:</strong> ${escHtml(formData.customerName)}</div>`);
   }
   if (formData.customerPhone) {
     details.push(`<div class="summary-detail">📞 <strong>Phone:</strong> ${escHtml(formData.customerPhone)}</div>`);
@@ -640,6 +655,13 @@ function renderForm() {
 
       <div class="section-label" style="margin-top:14px">Contact</div>
       <div class="field-row">
+        <div class="field-label">👤 Contact Name</div>
+        <input class="form-input" type="text" id="customerName"
+          placeholder="e.g., Craig Hopson"
+          value="${escAttr(formData.customerName || '')}"
+        />
+      </div>
+      <div class="field-row">
         <div class="field-label">📞 Customer Phone</div>
         <input class="form-input" type="tel" id="customerPhone"
           placeholder="e.g., 323-555-1234"
@@ -716,6 +738,7 @@ function migrateV04Data(saved) {
   if (!('deliveryMemoDetail' in saved)) saved.deliveryMemoDetail = '';
   if (!('pickUpMemo' in saved)) saved.pickUpMemo = false;
   if (!('pickUpMemoDetail' in saved)) saved.pickUpMemoDetail = '';
+  if (!('customerName' in saved)) saved.customerName = '';
 
   return saved;
 }
@@ -801,15 +824,18 @@ async function boot() {
     render();
 
     // Poll for RS changes via REST API (SDK cache doesn't update on field edits)
-    // Check every 3s. findRSFieldId() + cardId both cached — only 1 API call per poll.
+    // Check every 5s. Overlap guard prevents stacking. findRSFieldId + cardId cached.
     if (window._rsPoller) clearInterval(window._rsPoller);
     window._rsPoller = setInterval(async () => {
       try {
         const wasRS = hasRS;
         hasRS = await checkRS_REST();
-        if (hasRS !== wasRS) render();
-      } catch (e) { /* silent */ }
-    }, 3000);
+        if (hasRS !== wasRS) {
+          console.log('RS changed:', wasRS, '→', hasRS);
+          render();
+        }
+      } catch (e) { console.warn('RS poller error:', e.message); }
+    }, 5000);
 
   } catch (e) {
     console.error('Boot error:', e);
